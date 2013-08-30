@@ -21,10 +21,10 @@ All the files outside of the `include` directory are only for testing purposes a
 
 ### Why should I use it?
 * very easy to use
-* no macros (we are in 21st century!)
+* no macros (we are in the 21st century!)
 * no external program to run on your source code
-* not intrusive, you don't need to change your existing code
-* flexible, you aren't forced to use object-oriented code
+* not intrusive, you don't need to change the layout of your functions or classes
+* you aren't forced to use object-oriented code
 * portable (doesn't use anything that is compiler-specific or platform-specific)
 * can do everything other libraries can do
 
