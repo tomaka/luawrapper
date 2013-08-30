@@ -42,7 +42,7 @@ All the examples are in C++, except of course the parameter passed to "executeCo
 
 Prints `7`
 
-All basic language types (`int`, `float`, `bool`, `char`, ...), plus std::string, can be read or written.
+All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::string`, can be read or written.
 
 #### Example 2: giving functions to lua
 
