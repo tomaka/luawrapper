@@ -1203,7 +1203,7 @@ struct LuaContext::Pusher<
 			>
 {
 	static int push(const LuaContext& context, TType value) {
-		return context.pushFunction<TType>(value);
+		return context.pushFunction<typename std::remove_pointer<TType>::type>(value);
 	}
 };
 

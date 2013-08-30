@@ -96,6 +96,19 @@ void test7() {
 		throw std::logic_error("Test 7 failed");
 }
 
+int test8_utility(int value) {
+	return value * 2;
+}
+
+void test8() {
+    LuaContext lua;
+    lua.writeVariable("f", &test8_utility);
+    if (lua.executeCode<int>("return f(5);") != 10)
+		throw std::logic_error("Test 8 failed");
+    if (lua.executeCode<int>("return f(7);") != 14)
+		throw std::logic_error("Test 8 failed");
+}
+
 int main() {
 	test1();
 	test2();
@@ -104,6 +117,7 @@ int main() {
 	test5();
 	test6();
 	test7();
+	test8();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;
