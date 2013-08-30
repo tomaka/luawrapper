@@ -14,7 +14,9 @@ This library was designed to be very simple to use: you can write lua variables 
 This is a headers-only library.
 Simply include the file `include/LuaContext.hpp` in your code, and you can use the `LuaContext` class.
 
-All the other files in the source code are only for testing purposes.
+The `include/misc/exception.hpp` file is required only for VC++.
+
+All the files outside of the `include` directory are only for testing purposes and can be ignored.
 
 ### Why should I use it?
 * very easy to use
