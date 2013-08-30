@@ -30,7 +30,7 @@ All the files outside of the `include` directory are only for testing purposes a
 
 ### Why should I not use it?
 * requires support for [C++11](http://en.wikipedia.org/wiki/C%2B%2B11), the latest C++ standard
-* requires [Boost](boost.org) (headers only)
+* requires [Boost](http://boost.org) (headers only)
 * inheritance not supported (and won't be supported until some reflection is added to the C++ language)
 
 ### Examples
