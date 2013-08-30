@@ -635,13 +635,13 @@ private:
 
 					// using the index function we created above
 					lua_pushstring(context.mState, "__index");
-					lua_pushlightuserdata(context.mState, &context);
+					lua_pushlightuserdata(context.mState, const_cast<void*>(static_cast<const void*>(&context)));
 					lua_pushcclosure(context.mState, indexFunction, 1);
 					lua_settable(context.mState, -3);
 
 					// using the newindex function we created above
 					lua_pushstring(context.mState, "__newindex");
-					lua_pushlightuserdata(context.mState, &context);
+					lua_pushlightuserdata(context.mState, const_cast<void*>(static_cast<const void*>(&context)));
 					lua_pushcclosure(context.mState, newIndexFunction, 1);
 					lua_settable(context.mState, -3);
 
