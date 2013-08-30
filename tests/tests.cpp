@@ -109,6 +109,15 @@ void test8() {
 		throw std::logic_error("Test 8 failed");
 }
 
+void test9() {
+    LuaContext lua;
+	lua.writeFunction("a", [](int x) { return x + 1; });
+
+	LuaContext lua2 = std::move(lua);
+    if (lua2.executeCode<int>("return a(2)") != 3)
+		throw std::logic_error("Test 9 failed");
+}
+
 int main() {
 	test1();
 	test2();
@@ -118,6 +127,7 @@ int main() {
 	test6();
 	test7();
 	test8();
+	test9();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;

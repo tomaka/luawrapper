@@ -83,6 +83,9 @@ public:
 		mState = luaL_newstate();
 		if (mState == nullptr)		throw std::bad_alloc();
 
+		// pushing a pointer to ourselves in the registry
+		updateRegistryPointer();
+
 		// setting the panic function
 		lua_atpanic(mState, [](lua_State* state) -> int {
 			const std::string str = lua_tostring(state, -1);
@@ -96,18 +99,27 @@ public:
 			luaL_openlibs(mState);
 	}
 
-	// TODO: handle problem with "this" pointer being stored in lua
-	/*LuaContext(LuaContext&& s) :
+	/**
+	 *
+	 */
+	LuaContext(LuaContext&& s) :
 		mState(s.mState)
 	{
 		s.mState = luaL_newstate();
+		updateRegistryPointer();
+		s.updateRegistryPointer();
 	}
-
+	
+	/**
+	 *
+	 */
 	LuaContext& operator=(LuaContext&& s)
 	{
 		std::swap(mState, s.mState);
+		updateRegistryPointer();
+		s.updateRegistryPointer();
 		return *this;
-	}*/
+	}
 
 	/**
 	 * Destructor
@@ -476,6 +488,15 @@ private:
 			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(TReturnType)};
 		return std::move(val.get());
 	}
+
+	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
+	// it is available for everything that needs it and its offset is at &typeid(LuaContext)
+	// this function refreshes it
+	void updateRegistryPointer() {
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(LuaContext)));
+		lua_pushlightuserdata(mState, this);
+		lua_settable(mState, LUA_REGISTRYINDEX);
+	}
 	
 
 	/**************************************************/
@@ -635,7 +656,8 @@ private:
 			} else if (pcallReturnValue == LUA_ERRRUN) {
 				if (lua_isstring(mState, 1)) {
 					// the error is a string
-					throw ExecutionErrorException{readTopAndPop<std::string>(1)};
+					const auto str = readTopAndPop<std::string>(1);
+					throw ExecutionErrorException{str};
 
 				} else {
 					// an exception_ptr was pushed on the stack
@@ -680,11 +702,14 @@ private:
 
 			// this function will be stored in __index in the metatable
 			const auto indexFunction = [](lua_State* lua) -> int {
+				lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(LuaContext)));
+				lua_gettable(lua, LUA_REGISTRYINDEX);
+				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
+				lua_pop(lua, 1);
+				
 				assert(lua_gettop(lua) == 2);
 				assert(lua_isuserdata(lua, 1));
 				assert(lua_isstring(lua, 2));
-
-				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, lua_upvalueindex(1)));
 				const auto memberName = lua_tostring(lua, 2);
 
 				// looking for a function in getters list
@@ -715,11 +740,14 @@ private:
 
 			// this function will be stored in __newindex in the metatable
 			const auto newIndexFunction = [](lua_State* lua) -> int {
-				assert(lua_gettop(lua) == 3);
+				lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(LuaContext)));
+				lua_gettable(lua, LUA_REGISTRYINDEX);
+				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
+				lua_pop(lua, 1);
+
+				assert(lua_gettop(lua) == 2);
 				assert(lua_isuserdata(lua, 1));
 				assert(lua_isstring(lua, 2));
-
-				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, lua_upvalueindex(1)));
 				const auto memberName = lua_tostring(lua, 2);
 
 				// looking for a function in getters list
@@ -771,14 +799,12 @@ private:
 
 					// using the index function we created above
 					lua_pushstring(context.mState, "__index");
-					lua_pushlightuserdata(context.mState, const_cast<void*>(static_cast<const void*>(&context)));
-					lua_pushcclosure(context.mState, indexFunction, 1);
+					lua_pushcfunction(context.mState, indexFunction);
 					lua_settable(context.mState, -3);
 
 					// using the newindex function we created above
 					lua_pushstring(context.mState, "__newindex");
-					lua_pushlightuserdata(context.mState, const_cast<void*>(static_cast<const void*>(&context)));
-					lua_pushcclosure(context.mState, newIndexFunction, 1);
+					lua_pushcfunction(context.mState, newIndexFunction);
 					lua_settable(context.mState, -3);
 
 					// at this point, the stack contains the object at offset -2 and the metatable at offset -1
@@ -938,8 +964,12 @@ private:
 		// we will create a userdata which contains a copy of a function object "int(lua_State*)"
 		// but first we have to create it
 		const auto function = [](lua_State* state) -> int
-		{			
-			const auto me = static_cast<LuaContext*>(lua_touserdata(state, lua_upvalueindex(2)));
+		{
+			lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
+			lua_gettable(state, LUA_REGISTRYINDEX);
+			const auto me = static_cast<LuaContext*>(lua_touserdata(state, -1));
+			lua_pop(state, 1);
+
 			const auto toCall = static_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
 			
 			// checking if number of parameters is correct
@@ -969,12 +999,9 @@ private:
 		// we copy the function object onto the stack
 		const auto functionObjectLocation = static_cast<TFunctionObject*>(lua_newuserdata(mState, sizeof(TFunctionObject)));
 		new (functionObjectLocation) TFunctionObject{std::move(fn)};
-
-		// also adding a pointer to the context
-		lua_pushlightuserdata(mState, const_cast<LuaContext*>(this));
-		
+				
 		// finally pushing the function
-		lua_pushcclosure(mState, function, 2);
+		lua_pushcclosure(mState, function, 1);
 		return 1;
 	}
 	
