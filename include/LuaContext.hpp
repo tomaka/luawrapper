@@ -833,8 +833,11 @@ private:
 	/**************************************************/
 	/*             PUSHING ANY FUNCTION               */
 	/**************************************************/
+	// this is the version for non-trivially destructible objects
 	template<typename TFunctionType, typename TFunctionObject>
-	int pushFunction(TFunctionObject fn) const {
+	auto pushFunction(TFunctionObject fn) const
+		-> typename std::enable_if<!std::is_trivially_destructible<TFunctionObject>::value, int>::type
+	{
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
 		// if we used lua's cfunctions system, we could not detect when the function is no longer in use, which could cause problems
 		// so we use userdata instead
@@ -910,17 +913,68 @@ private:
 		lua_pushcfunction(mState, callCallback);
 		lua_settable(mState, -3);
 
-		if (!std::is_trivially_destructible<Function>::value) {
-			lua_pushstring(mState, "__gc");
-			lua_pushcfunction(mState, garbageCallback);
-			lua_settable(mState, -3);
-		}
+		lua_pushstring(mState, "__gc");
+		lua_pushcfunction(mState, garbageCallback);
+		lua_settable(mState, -3);
 
 		// at this point, the stack contains the object at offset -2 and the metatable at offset -1
 		// lua_setmetatable will bind the two together and pop the metatable
 		// our custom function remains on the stack (and that's what we want)
 		lua_setmetatable(mState, -2);
 
+		return 1;
+	}
+
+	// this is the version for trivially destructible objects
+	template<typename TFunctionType, typename TFunctionObject>
+	auto pushFunction(TFunctionObject fn) const
+		-> typename std::enable_if<std::is_trivially_destructible<TFunctionObject>::value, int>::type
+	{
+		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
+		// since "fn" doesn't need to be destroyed, we simply push it on the stack
+		typedef FunctionArgumentsGetter<TFunctionType>
+			FunctionArguments;
+		
+		// we will create a userdata which contains a copy of a function object "int(lua_State*)"
+		// but first we have to create it
+		const auto function = [](lua_State* state) -> int
+		{			
+			const auto me = static_cast<LuaContext*>(lua_touserdata(state, lua_upvalueindex(2)));
+			const auto toCall = static_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
+			
+			// checking if number of parameters is correct
+			const int paramsCount = std::tuple_size<typename FunctionArguments::Parameters>::value;
+			if (lua_gettop(state) < paramsCount) {
+				// if not, using lua_error to return an error
+				luaL_where(state, 1);
+				lua_pushstring(state, "This function requires at least ");
+				lua_pushnumber(state, paramsCount);
+				lua_pushstring(state, " parameter(s)");
+				lua_concat(state, 4);
+
+				// lua_error throws an exception when compiling as C++
+				return lua_error(state);
+			}
+			
+			// reading parameters from the stack
+			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*me, -paramsCount);
+
+			// calling the function, note that "result" should be a tuple
+			auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(*toCall, parameters);
+
+			// pushing the result on the stack and returning number of pushed elements
+			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
+		};
+
+		// we copy the function object onto the stack
+		const auto functionObjectLocation = static_cast<TFunctionObject*>(lua_newuserdata(mState, sizeof(TFunctionObject)));
+		new (functionObjectLocation) TFunctionObject{std::move(fn)};
+
+		// also adding a pointer to the context
+		lua_pushlightuserdata(mState, const_cast<LuaContext*>(this));
+		
+		// finally pushing the function
+		lua_pushcclosure(mState, function, 2);
 		return 1;
 	}
 	
@@ -1177,53 +1231,6 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 	}
 };
 #endif
-
-// pushing a C function
-/*template<typename FunctionType>
-auto push(FunctionType fn) const
-	-> typename std::enable_if<
-					std::is_function<FunctionType>::value ||
-					(std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value)
-				,int>::type
-{
-	// utility structure
-	typedef typename FnTupleWrapper<FunctionType>		TupleWrapper;
-
-	// this is the function that will in fact receive the focus from lua
-	const auto functionToPush = [](lua_State* state) -> int {
-		// retreiving the parameters from the stack
-		const auto me = static_cast<LuaContext*>(lua_touserdata(state, lua_upvalueindex(1)));
-		const auto functionPtr = static_cast<FunctionType>(lua_touserdata(state, lua_upvalueindex(2)));
-		
-		// 
-		static const int paramsCount = std::tuple_size<TupleWrapper::ParamsType>::value;
-		if (lua_gettop(state) < paramsCount) {
-			// if not, using lua_error to return an error
-			luaL_where(state, 1);
-			lua_pushstring(state, "This function requires at least ");
-			lua_pushnumber(state, paramsCount);
-			lua_pushstring(state, " parameter(s)");
-			lua_concat(state, 4);
-
-			// lua_error throws an exception when compiling as C++
-			return lua_error(state);
-		}
-
-		// reading parameters
-		TupleWrapper::ParamsType parameters;
-		me->read(-paramsCount, &parameters);
-
-		// calling function and returning
-		auto result = TupleWrapper::call(functionPtr, std::move(parameters));
-		return me->push(std::move(result));
-	};
-
-	// now that we have our function to push, we'll push it alongside with "this" and the function pointer
-	lua_pushlightuserdata(mState, this);			// TODO: problem when move-constructing the lua context
-	lua_pushlightuserdata(mState, fn);
-	lua_pushcclose(mState, &functionToPush, 2);
-	return 1;
-}*/
 
 // C function
 template<typename TType>
