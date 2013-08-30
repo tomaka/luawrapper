@@ -652,240 +652,6 @@ private:
 		}
 	};
 
-	// boolean
-	template<>
-	struct Pusher<bool> {
-		static int push(const LuaContext& context, bool value) {
-			lua_pushboolean(context.mState, value);
-			return 1;
-		}
-	};
-	
-	// string
-	template<>
-	struct Pusher<std::string> {
-		static int push(const LuaContext& context, const std::string& value) {
-			lua_pushstring(context.mState, value.c_str());
-			return 1;
-		}
-	};
-	
-	// const char*
-	template<>
-	struct Pusher<const char*> {
-		static int push(const LuaContext& context, const char* value) {
-			lua_pushstring(context.mState, value);
-			return 1;
-		}
-	};
-
-	// floating numbers
-	template<typename T>
-	struct Pusher<T, typename std::enable_if<std::is_floating_point<T>::value>::type> {
-		static int push(const LuaContext& context, T value) {
-			lua_pushnumber(context.mState, value);
-			return 1;
-		}
-	};
-	
-	// integers
-	template<typename T>
-	struct Pusher<T, typename std::enable_if<std::is_integral<T>::value>::type> {
-		static int push(const LuaContext& context, T value) {
-			lua_pushinteger(context.mState, value);
-			return 1;
-		}
-	};
-	
-	// nil
-	template<>
-	struct Pusher<std::nullptr_t> {
-		static int push(const LuaContext& context, std::nullptr_t value) {
-			assert(value == nullptr);
-			lua_pushnil(context.mState);
-			return 1;
-		}
-	};
-	
-	// maps
-	template<typename TKey, typename TValue>
-	struct Pusher<std::map<TKey,TValue>> {
-		static int push(const LuaContext& context, const std::map<TKey,TValue>& value) {
-			lua_newtable(context.mState);
-
-			for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-				Pusher<std::decay<TKey>::type>::push(context, i->first);
-				Pusher<std::decay<TValue>::type>::push(context, i->second);
-				lua_settable(context.mState, -3);
-			}
-
-			return 1;
-		}
-	};
-	
-	// unordered_maps
-	template<typename TKey, typename TValue>
-	struct Pusher<std::unordered_map<TKey,TValue>> {
-		static int push(const LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
-			lua_newtable(context.mState);
-
-			for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-				Pusher<std::decay<TKey>::type>::push(context, i->first);
-				Pusher<std::decay<TValue>::type>::push(context, i->second);
-				lua_settable(context.mState, -3);
-			}
-
-			return 1;
-		}
-	};
-	
-	// vectors
-	template<typename TType>
-	struct Pusher<std::vector<TType>> {
-		static int push(const LuaContext& context, const std::vector<TType>& value) {
-			lua_newtable(context.mState);
-
-			for (unsigned int i = 0; i < value.size(); ++i) {
-				lua_pushinteger(context.mState, i);
-				Pusher<std::decay<TType>::type>::push(context, value[i]);
-				lua_settable(context.mState, -3);
-			}
-
-			return 1;
-		}
-	};
-	
-	// unique_ptr
-	template<typename TType>
-	struct Pusher<std::unique_ptr<TType>> {
-		static int push(const LuaContext& context, std::unique_ptr<TType> value) {
-			return Pusher<std::shared_ptr<TType>>::push(context, std::move(value));
-		}
-	};
-	
-	// enum
-	template<typename TEnum>
-	struct Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
-		static int push(const LuaContext& context, TEnum value) {
-			typedef typename std::underlying_type<T>::type	RealType;
-			return Pusher<RealType>::push(context, static_cast<RealType>(value));
-		}
-	};
-
-	// pushing a C function
-	/*template<typename FunctionType>
-	auto push(FunctionType fn) const
-		-> typename std::enable_if<
-						std::is_function<FunctionType>::value ||
-						(std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value)
-					,int>::type
-	{
-		// utility structure
-		typedef typename FnTupleWrapper<FunctionType>		TupleWrapper;
-
-		// this is the function that will in fact receive the focus from lua
-		const auto functionToPush = [](lua_State* state) -> int {
-			// retreiving the parameters from the stack
-			const auto me = static_cast<LuaContext*>(lua_touserdata(state, lua_upvalueindex(1)));
-			const auto functionPtr = static_cast<FunctionType>(lua_touserdata(state, lua_upvalueindex(2)));
-			
-			// 
-			static const int paramsCount = std::tuple_size<TupleWrapper::ParamsType>::value;
-			if (lua_gettop(state) < paramsCount) {
-				// if not, using lua_error to return an error
-				luaL_where(state, 1);
-				lua_pushstring(state, "This function requires at least ");
-				lua_pushnumber(state, paramsCount);
-				lua_pushstring(state, " parameter(s)");
-				lua_concat(state, 4);
-
-				// lua_error throws an exception when compiling as C++
-				return lua_error(state);
-			}
-
-			// reading parameters
-			TupleWrapper::ParamsType parameters;
-			me->read(-paramsCount, &parameters);
-
-			// calling function and returning
-			auto result = TupleWrapper::call(functionPtr, std::move(parameters));
-			return me->push(std::move(result));
-		};
-
-		// now that we have our function to push, we'll push it alongside with "this" and the function pointer
-		lua_pushlightuserdata(mState, this);			// TODO: problem when move-constructing the lua context
-		lua_pushlightuserdata(mState, fn);
-		lua_pushcclose(mState, &functionToPush, 2);
-		return 1;
-	}*/
-	
-	// C function
-	template<typename TType>
-	struct Pusher<
-		TType, typename std::enable_if<
-											std::is_function<TType>::value ||
-											(std::is_pointer<TType>::value && std::is_function<typename std::remove_pointer<TType>::type>::value)
-										>::type
-				>
-	{
-		static int push(const LuaContext& context, TType value) {
-			return context.pushFunction<TType>(value);
-		}
-	};
-	
-	// std::function
-	template<typename ReturnType, typename... ParamTypes>
-	struct Pusher<std::function<ReturnType (ParamTypes...)>> {
-		static int push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
-			return context.pushFunction<ReturnType (ParamTypes...)>(value);
-		}
-	};
-
-	// boost::variant
-	template<typename... TTypes>
-	struct Pusher<boost::variant<TTypes...>> {
-		static int push(const LuaContext& context, const boost::variant<TTypes...>& value) {
-			return value.apply_visitor(VariantWriter{context});
-		}
-
-	private:
-		struct VariantWriter : public boost::static_visitor<int> {
-			template<typename TType>
-			int operator()(TType value)
-			{
-				return Pusher<std::decay<TType>::type>::push(ctxt, value);
-			}
-
-			VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
-			const LuaContext& ctxt;
-		};
-	};
-
-	// tuple
-	template<typename... TTypes>
-	struct Pusher<std::tuple<TTypes...>> {
-		static int push(const LuaContext& context, const std::tuple<TTypes...>& value) {
-			return push2(context, value, std::integral_constant<int,0>{});
-		}
-
-	private:
-		template<int N>
-		static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
-			typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
-			const auto num = Pusher<std::decay<ElemType>::type>::push(context, std::get<N>(value));
-			try {
-				return num + push2(context, value, std::integral_constant<int,N+1>{});
-			} catch(...) {
-				lua_pop(context.mState, num);
-				throw;
-			}
-		}
-		
-		static int push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
-			return 0;
-		}
-	};
-	
 	
 	/**************************************************/
 	/*            CALL FUNCTION WITH TUPLE            */
@@ -1073,504 +839,6 @@ private:
 		}
 	};
 
-	// reading null
-	template<>
-	struct Reader<std::nullptr_t>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isnil(context.mState, index);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::nullptr_t
-		{
-			return nullptr;
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::nullptr_t>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::nullptr_t
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::nullptr_t)};
-			return read(context, index);
-		}
-	};
-
-	// integrals
-	template<typename TType>
-	struct Reader<
-				TType,
-				typename std::enable_if<std::is_integral<TType>::value>::type
-			>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isnumber(context.mState, index) && fmod(lua_tonumber(context.mState, index), 1.) == 0;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> TType
-		{
-			return lua_tointeger(context.mState, index);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<TType>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> TType
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
-			return read(context, index);
-		}
-	};
-
-	// floating points
-	template<typename TType>
-	struct Reader<
-				TType,
-				typename std::enable_if<std::is_floating_point<TType>::value>::type
-			>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isnumber(context.mState, index) != 0;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> TType
-		{
-			return lua_tonumber(context.mState, index);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<TType>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> TType
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
-			return read(context, index);
-		}
-	};
-
-	// boolean
-	template<>
-	struct Reader<bool>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isboolean(context.mState, index);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> bool
-		{
-			return lua_toboolean(context.mState, index) != 0;
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<bool>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> bool
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(bool)};
-			return read(context, index);
-		}
-	};
-
-	// string
-	// lua_tostring returns a temporary pointer, but that's not a problem since we copy
-	//   the data into a std::string
-	template<>
-	struct Reader<std::string>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isstring(context.mState, index) != 0;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::string
-		{
-			return lua_tostring(context.mState, index);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::string>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::string
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::string)};
-			return read(context, index);
-		}
-	};
-	
-	// function
-	template<typename TRetValue, typename... TParameters>
-	struct Reader<std::function<TRetValue (TParameters...)>>
-	{
-		typedef std::function<TRetValue (TParameters...)>
-			Function;
-
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isfunction(context.mState, index) != 0;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> Function
-		{
-			auto beacon = std::make_shared<char>();
-
-			lua_pushlightuserdata(context.mState, beacon.get());
-			lua_pushvalue(context.mState, -2);
-			lua_settable(context.mState, LUA_REGISTRYINDEX);
-
-			return [&context,beacon](TParameters&&... params) -> TRetValue {
-				lua_pushlightuserdata(context.mState, beacon.get());
-				lua_gettable(context.mState, LUA_REGISTRYINDEX);
-				return context.call<TRetValue>(std::make_tuple(std::forward<TParameters>(params)...));
-			};
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<Function>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> Function
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::function<TFunction>)};
-			return read(context, index);
-		}
-	};
-
-	// maps
-	template<typename TKey, typename TValue>
-	struct Reader<std::map<TKey,TValue>>
-	{
-		typedef Reader<typename std::decay<TKey>::type>
-			KeyReader;
-		typedef Reader<typename std::decay<TValue>::type>
-			ValueReader;
-
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_istable(context.mState, index);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::map<TKey,TValue>
-		{
-			std::map<TKey,TValue> result;
-
-			// we traverse the table at the top of the stack
-			// TODO: handle exceptions
-			lua_pushnil(context.mState);		// first key
-			while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
-				// now a key and its value are pushed on the stack
-				try {
-					auto key = KeyReader::testRead(context, -2);
-					auto value = ValueReader::testRead(context, -1);
-
-					if (!key.is_initialized() || !value.is_initialized()) {
-						lua_pop(mState, 2);		// we remove the value and the key
-						return {};
-					}
-
-					result.insert({ std::move(key.get()), std::move(value.get()) });
-					lua_pop(mState, 1);		// we remove the value but keep the key for the next iteration
-
-				} catch(...) {
-					lua_pop(mState, 2);		// we remove the value and the key
-					throw;
-				}
-			}
-
-			return std::move(result);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::map<TKey,TValue>>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::map<TKey,TValue>
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::map<TKey,TValue>)};
-			return read(context, index);
-		}
-	};
-
-	// unordered_maps
-	template<typename TKey, typename TValue>
-	struct Reader<std::unordered_map<TKey,TValue>>
-	{
-		typedef Reader<typename std::decay<TKey>::type>
-			KeyReader;
-		typedef Reader<typename std::decay<TValue>::type>
-			ValueReader;
-
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_istable(context.mState, index);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::unordered_map<TKey,TValue>
-		{
-			std::unordered_map<TKey,TValue> result;
-
-			// we traverse the table at the top of the stack
-			// TODO: handle exceptions
-			lua_pushnil(context.mState);		// first key
-			while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
-				// now a key and its value are pushed on the stack
-				try {
-					auto key = KeyReader::testRead(context, -2);
-					auto value = ValueReader::testRead(context, -1);
-
-					if (!key.is_initialized() || !value.is_initialized()) {
-						lua_pop(context.mState, 2);		// we remove the value and the key
-						return {};
-					}
-
-					result.insert({ std::move(key.get()), std::move(value.get()) });
-					lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
-
-				} catch(...) {
-					lua_pop(context.mState, 2);		// we remove the value and the key
-					throw;
-				}
-			}
-
-			return std::move(result);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::unordered_map<TKey,TValue>>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::unordered_map<TKey,TValue>
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::unordered_map<TKey,TValue>)};
-			return read(context, index);
-		}
-	};
-
-	// optional
-	template<typename TType>
-	struct Reader<boost::optional<TType>>
-	{
-		typedef Reader<typename std::decay<TType>::type>
-			SubReader;
-
-		static bool test(const LuaContext& context, int index)
-		{
-			return lua_isnil(context.mState, index) || SubReader::test(context, index);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> boost::optional<TType>
-		{
-			return lua_isnil(context.mState, index) ? {} : SubReader::read(context, index);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<boost::optional<TType>>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> boost::optional<TType>
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(boost::optional<TType>)};
-			return read(context, index);
-		}
-	};
-
-	// variant
-	template<typename... TTypes>
-	struct Reader<boost::variant<TTypes...>>
-	{
-	private:
-		typedef boost::variant<TTypes...>
-			Variant;
-		
-		template<typename TIterBegin, typename TIterEnd, typename = void>
-		struct VariantReader {
-			static Variant read(const LuaContext& ctxt, int index)
-			{
-				auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
-				if (val.is_initialized())
-					return Variant{std::move(val.get())};
-				return VariantReader<boost::mpl::next<TIterBegin>::type, TIterEnd>::read(ctxt, index);
-			}
-		};
-
-		template<typename TIterBegin, typename TIterEnd>
-		struct VariantReader<TIterBegin, TIterEnd, typename std::enable_if<boost::mpl::distance<TIterBegin, TIterEnd>::type::value == 0>::type>
-		{
-			static Variant read(const LuaContext& ctxt, int index) {
-				throw WrongTypeException(lua_typename(ctxt.mState, lua_type(ctxt.mState, index)), typeid(Variant));
-			}
-		};
-
-	public:
-		static bool test(const LuaContext& context, int index)
-		{
-			return true;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> Variant
-		{
-			typedef boost::mpl::begin<Variant::types>::type		Begin;
-			typedef boost::mpl::end<Variant::types>::type		End;
-
-			return VariantReader<Begin, End>::read(context, index);
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<Variant>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> Variant
-		{
-			if (!test(context, index))
-				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Variant)};
-			return read(context, index);
-		}
-	};
-	
-	// reading a tuple
-	template<>
-	struct Reader<std::tuple<>>
-	{
-		static bool test(const LuaContext& context, int index)
-		{
-			return true;
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::tuple<>
-		{
-			return {};
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::tuple<>>
-		{
-			return std::tuple<>{};
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::tuple<>
-		{
-			return {};
-		}
-	};
-	
-	template<typename TFirst, typename... TOthers>
-	struct Reader<std::tuple<TFirst, TOthers...>>
-	{
-		typedef Reader<typename std::decay<TFirst>::type>
-			TFirstReader;
-		typedef Reader<std::tuple<TOthers...>>
-			TOthersReader;
-
-		static bool test(const LuaContext& context, int index)
-		{
-			return TFirstReader::test(context, index) && TOthersReader::test(context, index + 1);
-		}
-		
-		static auto read(const LuaContext& context, int index)
-			-> std::tuple<TFirst, TOthers...>
-		{
-			return std::tuple_cat(std::tuple<TFirst>{TFirstReader::read(context, index)}, TOthersReader::read(context, index + 1));
-		}
-
-		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::tuple<TFirst, TOthers...>>
-		{
-			if (!test(context, index))
-				return {};
-			return read(context, index);
-		}
-
-		static auto readSafe(const LuaContext& context, int index)
-			-> std::tuple<TFirst, TOthers...>
-		{
-			try {
-				return std::tuple_cat(std::tuple<TFirst>{TFirstReader::readSafe(context, index)}, TOthersReader::readSafe(context, index + 1));
-
-			} catch(...) {
-				std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
-			}
-		}
-	};
-
 
 	/**************************************************/
 	/*                   UTILITIES                    */
@@ -1604,5 +872,746 @@ template<typename T> struct LuaContext::Tupleizer						{ typedef std::tuple<T> t
 /*template<typename... Args>
 struct LuaContext::Tupleizer<std::tuple<Args...>>						{ typedef std::tuple<Args...> type; };*/
 template<> struct LuaContext::Tupleizer<void>							{ typedef std::tuple<> type; };	
+
+
+
+
+/**************************************************/
+/*                PUSH FUNCTIONS                  */
+/**************************************************/
+// boolean
+template<>
+struct LuaContext::Pusher<bool> {
+	static int push(const LuaContext& context, bool value) {
+		lua_pushboolean(context.mState, value);
+		return 1;
+	}
+};
+
+// string
+template<>
+struct LuaContext::Pusher<std::string> {
+	static int push(const LuaContext& context, const std::string& value) {
+		lua_pushstring(context.mState, value.c_str());
+		return 1;
+	}
+};
+
+// const char*
+template<>
+struct LuaContext::Pusher<const char*> {
+	static int push(const LuaContext& context, const char* value) {
+		lua_pushstring(context.mState, value);
+		return 1;
+	}
+};
+
+// floating numbers
+template<typename T>
+struct LuaContext::Pusher<T, typename std::enable_if<std::is_floating_point<T>::value>::type> {
+	static int push(const LuaContext& context, T value) {
+		lua_pushnumber(context.mState, value);
+		return 1;
+	}
+};
+
+// integers
+template<typename T>
+struct LuaContext::Pusher<T, typename std::enable_if<std::is_integral<T>::value>::type> {
+	static int push(const LuaContext& context, T value) {
+		lua_pushinteger(context.mState, value);
+		return 1;
+	}
+};
+
+// nil
+template<>
+struct LuaContext::Pusher<std::nullptr_t> {
+	static int push(const LuaContext& context, std::nullptr_t value) {
+		assert(value == nullptr);
+		lua_pushnil(context.mState);
+		return 1;
+	}
+};
+
+// maps
+template<typename TKey, typename TValue>
+struct LuaContext::Pusher<std::map<TKey,TValue>> {
+	static int push(const LuaContext& context, const std::map<TKey,TValue>& value) {
+		lua_newtable(context.mState);
+
+		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
+			Pusher<std::decay<TKey>::type>::push(context, i->first);
+			Pusher<std::decay<TValue>::type>::push(context, i->second);
+			lua_settable(context.mState, -3);
+		}
+
+		return 1;
+	}
+};
+
+// unordered_maps
+template<typename TKey, typename TValue>
+struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
+	static int push(const LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
+		lua_newtable(context.mState);
+
+		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
+			Pusher<std::decay<TKey>::type>::push(context, i->first);
+			Pusher<std::decay<TValue>::type>::push(context, i->second);
+			lua_settable(context.mState, -3);
+		}
+
+		return 1;
+	}
+};
+
+// vectors
+template<typename TType>
+struct LuaContext::Pusher<std::vector<TType>> {
+	static int push(const LuaContext& context, const std::vector<TType>& value) {
+		lua_newtable(context.mState);
+
+		for (unsigned int i = 0; i < value.size(); ++i) {
+			lua_pushinteger(context.mState, i);
+			Pusher<std::decay<TType>::type>::push(context, value[i]);
+			lua_settable(context.mState, -3);
+		}
+
+		return 1;
+	}
+};
+
+// unique_ptr
+template<typename TType>
+struct LuaContext::Pusher<std::unique_ptr<TType>> {
+	static int push(const LuaContext& context, std::unique_ptr<TType> value) {
+		return Pusher<std::shared_ptr<TType>>::push(context, std::move(value));
+	}
+};
+
+// enum
+template<typename TEnum>
+struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
+	static int push(const LuaContext& context, TEnum value) {
+		typedef typename std::underlying_type<T>::type	RealType;
+		return Pusher<RealType>::push(context, static_cast<RealType>(value));
+	}
+};
+
+// pushing a C function
+/*template<typename FunctionType>
+auto push(FunctionType fn) const
+	-> typename std::enable_if<
+					std::is_function<FunctionType>::value ||
+					(std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value)
+				,int>::type
+{
+	// utility structure
+	typedef typename FnTupleWrapper<FunctionType>		TupleWrapper;
+
+	// this is the function that will in fact receive the focus from lua
+	const auto functionToPush = [](lua_State* state) -> int {
+		// retreiving the parameters from the stack
+		const auto me = static_cast<LuaContext*>(lua_touserdata(state, lua_upvalueindex(1)));
+		const auto functionPtr = static_cast<FunctionType>(lua_touserdata(state, lua_upvalueindex(2)));
+		
+		// 
+		static const int paramsCount = std::tuple_size<TupleWrapper::ParamsType>::value;
+		if (lua_gettop(state) < paramsCount) {
+			// if not, using lua_error to return an error
+			luaL_where(state, 1);
+			lua_pushstring(state, "This function requires at least ");
+			lua_pushnumber(state, paramsCount);
+			lua_pushstring(state, " parameter(s)");
+			lua_concat(state, 4);
+
+			// lua_error throws an exception when compiling as C++
+			return lua_error(state);
+		}
+
+		// reading parameters
+		TupleWrapper::ParamsType parameters;
+		me->read(-paramsCount, &parameters);
+
+		// calling function and returning
+		auto result = TupleWrapper::call(functionPtr, std::move(parameters));
+		return me->push(std::move(result));
+	};
+
+	// now that we have our function to push, we'll push it alongside with "this" and the function pointer
+	lua_pushlightuserdata(mState, this);			// TODO: problem when move-constructing the lua context
+	lua_pushlightuserdata(mState, fn);
+	lua_pushcclose(mState, &functionToPush, 2);
+	return 1;
+}*/
+
+// C function
+template<typename TType>
+struct LuaContext::Pusher<
+	TType, typename std::enable_if<
+										std::is_function<TType>::value ||
+										(std::is_pointer<TType>::value && std::is_function<typename std::remove_pointer<TType>::type>::value)
+									>::type
+			>
+{
+	static int push(const LuaContext& context, TType value) {
+		return context.pushFunction<TType>(value);
+	}
+};
+
+// std::function
+template<typename ReturnType, typename... ParamTypes>
+struct LuaContext::Pusher<std::function<ReturnType (ParamTypes...)>> {
+	static int push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
+		return context.pushFunction<ReturnType (ParamTypes...)>(value);
+	}
+};
+
+// boost::variant
+template<typename... TTypes>
+struct LuaContext::Pusher<boost::variant<TTypes...>> {
+	static int push(const LuaContext& context, const boost::variant<TTypes...>& value) {
+		return value.apply_visitor(VariantWriter{context});
+	}
+
+private:
+	struct VariantWriter : public boost::static_visitor<int> {
+		template<typename TType>
+		int operator()(TType value)
+		{
+			return Pusher<std::decay<TType>::type>::push(ctxt, value);
+		}
+
+		VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
+		const LuaContext& ctxt;
+	};
+};
+
+// tuple
+template<typename... TTypes>
+struct LuaContext::Pusher<std::tuple<TTypes...>> {
+	static int push(const LuaContext& context, const std::tuple<TTypes...>& value) {
+		return push2(context, value, std::integral_constant<int,0>{});
+	}
+
+private:
+	template<int N>
+	static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
+		const auto num = Pusher<std::decay<ElemType>::type>::push(context, std::get<N>(value));
+		try {
+			return num + push2(context, value, std::integral_constant<int,N+1>{});
+		} catch(...) {
+			lua_pop(context.mState, num);
+			throw;
+		}
+	}
+	
+	static int push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return 0;
+	}
+};
+
+/**************************************************/
+/*                READ FUNCTIONS                  */
+/**************************************************/
+// reading null
+template<>
+struct LuaContext::Reader<std::nullptr_t>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnil(context.mState, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::nullptr_t
+	{
+		return nullptr;
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::nullptr_t>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::nullptr_t
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::nullptr_t)};
+		return read(context, index);
+	}
+};
+
+// integrals
+template<typename TType>
+struct LuaContext::Reader<
+			TType,
+			typename std::enable_if<std::is_integral<TType>::value>::type
+		>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnumber(context.mState, index) && fmod(lua_tonumber(context.mState, index), 1.) == 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> TType
+	{
+		return lua_tointeger(context.mState, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> TType
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
+		return read(context, index);
+	}
+};
+
+// floating points
+template<typename TType>
+struct LuaContext::Reader<
+			TType,
+			typename std::enable_if<std::is_floating_point<TType>::value>::type
+		>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnumber(context.mState, index) != 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> TType
+	{
+		return lua_tonumber(context.mState, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> TType
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
+		return read(context, index);
+	}
+};
+
+// boolean
+template<>
+struct LuaContext::Reader<bool>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isboolean(context.mState, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> bool
+	{
+		return lua_toboolean(context.mState, index) != 0;
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<bool>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> bool
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(bool)};
+		return read(context, index);
+	}
+};
+
+// string
+// lua_tostring returns a temporary pointer, but that's not a problem since we copy
+//   the data into a std::string
+template<>
+struct LuaContext::Reader<std::string>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isstring(context.mState, index) != 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::string
+	{
+		return lua_tostring(context.mState, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::string>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::string
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::string)};
+		return read(context, index);
+	}
+};
+
+// function
+template<typename TRetValue, typename... TParameters>
+struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
+{
+	typedef std::function<TRetValue (TParameters...)>
+		Function;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isfunction(context.mState, index) != 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> Function
+	{
+		auto beacon = std::make_shared<char>();
+
+		lua_pushlightuserdata(context.mState, beacon.get());
+		lua_pushvalue(context.mState, -2);
+		lua_settable(context.mState, LUA_REGISTRYINDEX);
+
+		return [&context,beacon](TParameters&&... params) -> TRetValue {
+			lua_pushlightuserdata(context.mState, beacon.get());
+			lua_gettable(context.mState, LUA_REGISTRYINDEX);
+			return context.call<TRetValue>(std::make_tuple(std::forward<TParameters>(params)...));
+		};
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<Function>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> Function
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::function<TFunction>)};
+		return read(context, index);
+	}
+};
+
+// maps
+template<typename TKey, typename TValue>
+struct LuaContext::Reader<std::map<TKey,TValue>>
+{
+	typedef Reader<typename std::decay<TKey>::type>
+		KeyReader;
+	typedef Reader<typename std::decay<TValue>::type>
+		ValueReader;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_istable(context.mState, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::map<TKey,TValue>
+	{
+		std::map<TKey,TValue> result;
+
+		// we traverse the table at the top of the stack
+		// TODO: handle exceptions
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto key = KeyReader::testRead(context, -2);
+				auto value = ValueReader::testRead(context, -1);
+
+				if (!key.is_initialized() || !value.is_initialized()) {
+					lua_pop(mState, 2);		// we remove the value and the key
+					return {};
+				}
+
+				result.insert({ std::move(key.get()), std::move(value.get()) });
+				lua_pop(mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::map<TKey,TValue>>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::map<TKey,TValue>
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::map<TKey,TValue>)};
+		return read(context, index);
+	}
+};
+
+// unordered_maps
+template<typename TKey, typename TValue>
+struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
+{
+	typedef Reader<typename std::decay<TKey>::type>
+		KeyReader;
+	typedef Reader<typename std::decay<TValue>::type>
+		ValueReader;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_istable(context.mState, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::unordered_map<TKey,TValue>
+	{
+		std::unordered_map<TKey,TValue> result;
+
+		// we traverse the table at the top of the stack
+		// TODO: handle exceptions
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto key = KeyReader::testRead(context, -2);
+				auto value = ValueReader::testRead(context, -1);
+
+				if (!key.is_initialized() || !value.is_initialized()) {
+					lua_pop(context.mState, 2);		// we remove the value and the key
+					return {};
+				}
+
+				result.insert({ std::move(key.get()), std::move(value.get()) });
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(context.mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::unordered_map<TKey,TValue>>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::unordered_map<TKey,TValue>
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::unordered_map<TKey,TValue>)};
+		return read(context, index);
+	}
+};
+
+// optional
+template<typename TType>
+struct LuaContext::Reader<boost::optional<TType>>
+{
+	typedef Reader<typename std::decay<TType>::type>
+		SubReader;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnil(context.mState, index) || SubReader::test(context, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		return lua_isnil(context.mState, index) ? {} : SubReader::read(context, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<boost::optional<TType>>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(boost::optional<TType>)};
+		return read(context, index);
+	}
+};
+
+// variant
+template<typename... TTypes>
+struct LuaContext::Reader<boost::variant<TTypes...>>
+{
+private:
+	typedef boost::variant<TTypes...>
+		Variant;
+	
+	template<typename TIterBegin, typename TIterEnd, typename = void>
+	struct VariantReader {
+		static Variant read(const LuaContext& ctxt, int index)
+		{
+			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
+			if (val.is_initialized())
+				return Variant{std::move(val.get())};
+			return VariantReader<boost::mpl::next<TIterBegin>::type, TIterEnd>::read(ctxt, index);
+		}
+	};
+
+	template<typename TIterBegin, typename TIterEnd>
+	struct VariantReader<TIterBegin, TIterEnd, typename std::enable_if<boost::mpl::distance<TIterBegin, TIterEnd>::type::value == 0>::type>
+	{
+		static Variant read(const LuaContext& ctxt, int index) {
+			throw WrongTypeException(lua_typename(ctxt.mState, lua_type(ctxt.mState, index)), typeid(Variant));
+		}
+	};
+
+public:
+	static bool test(const LuaContext& context, int index)
+	{
+		return true;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> Variant
+	{
+		typedef boost::mpl::begin<Variant::types>::type		Begin;
+		typedef boost::mpl::end<Variant::types>::type		End;
+
+		return VariantReader<Begin, End>::read(context, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<Variant>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> Variant
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Variant)};
+		return read(context, index);
+	}
+};
+
+// reading a tuple
+template<>
+struct LuaContext::Reader<std::tuple<>>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return true;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::tuple<>
+	{
+		return {};
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::tuple<>>
+	{
+		return std::tuple<>{};
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::tuple<>
+	{
+		return {};
+	}
+};
+
+template<typename TFirst, typename... TOthers>
+struct LuaContext::Reader<std::tuple<TFirst, TOthers...>>
+{
+	typedef Reader<typename std::decay<TFirst>::type>
+		TFirstReader;
+	typedef Reader<std::tuple<TOthers...>>
+		TOthersReader;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return TFirstReader::test(context, index) && TOthersReader::test(context, index + 1);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> std::tuple<TFirst, TOthers...>
+	{
+		return std::tuple_cat(std::tuple<TFirst>{TFirstReader::read(context, index)}, TOthersReader::read(context, index + 1));
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::tuple<TFirst, TOthers...>>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> std::tuple<TFirst, TOthers...>
+	{
+		try {
+			return std::tuple_cat(std::tuple<TFirst>{TFirstReader::readSafe(context, index)}, TOthersReader::readSafe(context, index + 1));
+
+		} catch(...) {
+			std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
+		}
+	}
+};
 
 #endif
