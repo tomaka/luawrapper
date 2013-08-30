@@ -707,7 +707,7 @@ private:
 		
 		// we will create a userdata which contains a copy of a lambda function [](lua_State*) -> int
 		// but first we have to create it
-		auto functionToPush = [this,fn](lua_State* state) -> int {			// TODO: problem if we move the lua context
+		auto functionToPush = [&,fn](lua_State* state) -> int {			// TODO: problem if we move the lua context
 			// note that I'm using "this->" because of a bug in g++
 			assert(this->mState == state);
 			
