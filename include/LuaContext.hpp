@@ -151,7 +151,7 @@ public:
 
 	/// \brief Tells that lua will be allowed to access an object's function
 	template<typename TType, typename TRetValue, typename... TArgs>
-	void 				registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...))			{ registerFunctionImpl(name, std::function<TRetValue (TType*, TArgs...)>([=](TType* obj, TArgs&&... params) { return (obj->*f)(std::forward<TArgs>(params)...); })); }
+	void 				registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...))			{ registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); })); }
 
 	/// \brief Adds a custom function to a type determined using the function's first parameter
 	/// \param fn Function which takes as first parameter a std::shared_ptr
@@ -361,9 +361,9 @@ private:
 	template<typename TRetValue, typename TParam1, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, std::function<TRetValue (TParam1, TOtherParams...)> function)
 	{
-		static_assert(std::is_class<TParam1>::value || std::is_pointer<TParam1>::value, "registerFunction can only be called on a class or a pointer");
+		static_assert(std::is_class<typename std::decay<TParam1>::type>::value || std::is_pointer<TParam1>::value, "registerFunction can only be called on a class or a pointer");
 
-		mRegisteredGetters[&typeid(std::decay<TParam1>::type)][functionName] =
+		mRegisteredGetters[&typeid(typename std::decay<TParam1>::type)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
 				return ctxt.pushFunction<TRetValue (TParam1, TOtherParams...)>(function);
 			};
@@ -570,12 +570,18 @@ private:
 						}
 					}
 
-					return me->mDefaultGetter.at(&typeid(TType))(lua_touserdata(lua, 1), memberName, *me);
+					const auto iter2 = me->mDefaultGetter.find(&typeid(TType));
+					if (iter2 != me->mDefaultGetter.end()) {
+						return iter2->second(lua_touserdata(lua, 1), memberName, *me);
+					}
+
+					lua_pushnil(me->mState);
+					return 1;
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());
 					lua_error(lua);
-					throw "Dummy exception";
+					throw "Dummy exception";		// lua_error never returns, and we write this to avoid a compiler warning
 				}
 			};
 
@@ -822,13 +828,13 @@ private:
 		}
 
 		static auto read(const LuaContext& context, int index)
-			-> TType
+			-> TType&
 		{
 			return *static_cast<TType*>(lua_touserdata(context.mState, index));
 		}
 
 		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<TType>
+			-> boost::optional<TType&>
 		{
 			if (!test(context, index))
 				return {};
@@ -836,7 +842,7 @@ private:
 		}
 
 		static auto readSafe(const LuaContext& context, int index)
-			-> TType
+			-> TType&
 		{
 			if (!test(context, index))
 				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};

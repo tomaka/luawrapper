@@ -53,9 +53,7 @@ All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::strin
 
 Prints `3` and `8`
 
-You can also write function pointers or functors using `writeVariable`. The function's parameters and return type must be supported by `readVariable` and `writeVariable`.
-
-`writeVariable` supports `std::function` and basic function pointers or references.
+`writeVariable` supports `std::function` and basic function pointers or references.The function's parameters and return type must be supported by `readVariable` and `writeVariable`.
 
 
 #### Example 3: writing custom types
@@ -75,7 +73,9 @@ You can also write function pointers or functors using `writeVariable`. The func
     lua.writeVariable("obj", Object{});
     lua.executeCode("obj:increment();");
 
-Prints `incrementing`.
+    std::cout << lua.readVariable<Object>("obj").value << std::endl;
+
+Prints `incrementing` and `11`.
 
 In addition to basic types and functions, you can pass any object to `writeVariable`, including raw pointers, std::unique_ptr and std::shared_ptr. The object will then be copied into lua.
 Before doing so, you can call "registerFunction" so lua scripts can call the object's functions just like in the example above.

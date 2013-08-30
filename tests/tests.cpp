@@ -72,6 +72,27 @@ void test6() {
 		throw std::logic_error("Test 6 failed");
 }
 
+void test7() {
+	class Object {
+    public:
+     Object() : value(10) {}
+     
+     void  increment() { ++value; } 
+     
+     int value;
+    };
+    
+    LuaContext lua;
+    lua.registerFunction("increment", &Object::increment);
+    
+    lua.writeVariable("obj", Object{});
+    lua.executeCode("obj:increment()");
+
+    const auto val = lua.readVariable<Object>("obj").value;
+	if (val != 11)
+		throw std::logic_error("Test 7 failed");
+}
+
 int main() {
 	test1();
 	test2();
@@ -79,6 +100,7 @@ int main() {
 	test4();
 	test5();
 	test6();
+	test7();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;
