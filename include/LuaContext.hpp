@@ -208,7 +208,7 @@ public:
 	}
 	
 	/// \brief Returns true if variable exists (ie. not nil)
-	bool				hasVariable(const std::string& variableName) const					{ getGlobal(variableName); bool answer = lua_isnil(mState, -1); lua_pop(mState, 1); return answer; }
+	bool				hasVariable(const std::string& variableName) const					{ getGlobal(variableName); bool answer = lua_isnil(mState, -1); lua_pop(mState, 1); return !answer; }
 
 	/// \brief Destroys a variable
 	/// \details Puts the nil value into it
@@ -829,7 +829,7 @@ private:
 				>
 	{
 		static int push(LuaContext& context, TType value) {
-			return pushFunction<TType>(value);
+			return context.pushFunction<TType>(value);
 		}
 	};
 	
@@ -837,7 +837,7 @@ private:
 	template<typename ReturnType, typename... ParamTypes>
 	struct Pusher<std::function<ReturnType (ParamTypes...)>> {
 		static int push(LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
-			return pushFunction<ReturnType (ParamTypes...)>(value);
+			return context.pushFunction<ReturnType (ParamTypes...)>(value);
 		}
 	};
 
