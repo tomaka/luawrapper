@@ -745,7 +745,7 @@ private:
 				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
 				lua_pop(lua, 1);
 
-				assert(lua_gettop(lua) == 2);
+				assert(lua_gettop(lua) == 3);
 				assert(lua_isuserdata(lua, 1));
 				assert(lua_isstring(lua, 2));
 				const auto memberName = lua_tostring(lua, 2);
