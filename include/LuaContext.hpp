@@ -310,7 +310,7 @@ public:
 	 */
 	bool isVariableArray(const std::string& variableName) const
 	{
-		getGlobal(variableName);
+		lua_getglobal(mState, variableName.c_str());
 		bool answer = lua_istable(mState, -1);
 		lua_pop(mState, 1);
 		return answer;
@@ -329,7 +329,7 @@ public:
 	 */
 	bool hasVariable(const std::string& variableName) const	
 	{
-		getGlobal(variableName);
+		lua_getglobal(mState, variableName.c_str());
 		bool answer = lua_isnil(mState, -1);
 		lua_pop(mState, 1);
 		return !answer;
@@ -353,11 +353,9 @@ public:
 	template<typename TType, typename... TNestedTypes>
 	TType readVariable(const std::string& variableName, TNestedTypes&&... nestedElements) const
 	{
-		getGlobal(variableName);
+		lua_getglobal(mState, variableName.c_str());
 		lookIntoStackTop(std::forward<TNestedTypes>(nestedElements)...);
-		TType out;
-		readTopAndPop(1, &out);
-		return std::move(out);
+		return readTopAndPop<TType>(1);
 	}
 	
 	/**
@@ -366,11 +364,9 @@ public:
 	template<typename TType, typename... TNestedTypes>
 	TType readVariable(const char* variableName, TNestedTypes&&... nestedElements) const
 	{
-		getGlobal(variableName);
+		lua_getglobal(mState, variableName);
 		lookIntoStackTop(std::forward<TNestedTypes>(nestedElements)...);
-		TType out;
-		readTopAndPop(1, &out);
-		return std::move(out);
+		return readTopAndPop<TType>(1);
 	}
 
 	/**
@@ -390,8 +386,14 @@ public:
 	void writeVariable(const std::string& variableName, T&& data) {
 		static_assert(!std::is_same<typename Tupleizer<T>::type,T>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
 		const int pushedElems = Pusher<typename std::decay<T>::type>::push(*this, std::forward<T>(data));
-		try { setGlobal(variableName); } catch(...) { lua_pop(mState, pushedElems); throw; }
-		if (pushedElems >= 2) lua_pop(mState, pushedElems - 1);
+		try {
+			lua_setglobal(mState, variableName.c_str());
+		} catch(...) {
+			lua_pop(mState, pushedElems);
+			throw;
+		}
+		if (pushedElems >= 2)
+			lua_pop(mState, pushedElems - 1);
 	}
 
 	/**
@@ -400,8 +402,14 @@ public:
 	template<typename FunctionType, typename FunctionObject>
 	void writeFunction(const std::string& variableName, const FunctionObject& functionObject) {
 		const int pushedElems = pushFunction<FunctionType>(functionObject);
-		try { setGlobal(variableName); } catch(...) { lua_pop(mState, pushedElems); throw; }
-		if (pushedElems >= 2) lua_pop(mState, pushedElems - 1);
+		try {
+			lua_setglobal(mState, variableName.c_str());
+		} catch(...) {
+			lua_pop(mState, pushedElems);
+			throw;
+		}
+		if (pushedElems >= 2)
+			lua_pop(mState, pushedElems - 1);
 	}
 
 
@@ -426,16 +434,8 @@ private:
 	std::unordered_map<const std::type_info*,std::unordered_map<std::string, std::function<void (void*, LuaContext&)>>>			mRegisteredSetters;
 	std::unordered_map<const std::type_info*,std::function<void (void*, const std::string&, LuaContext&)>>						mDefaultSetter;
 	
-	// all the user types in the mState must have the value of &typeid(T) in their
-	//   metatable at key "_typeid"
-
-	// dummy functions
-	void	getGlobal(const std::string& variable) const			{ getGlobal(variable.c_str()); }
-	void	getGlobal(const char* variable) const					{ lua_getglobal(mState, variable); }
-	void	setGlobal(const std::string& variable)					{ setGlobal(variable.c_str()); }
-	void	setGlobal(const char* variable)							{ lua_setglobal(mState, variable); }
-
 	// this function takes a value representing the offset to look into
+	// it will look into the top element of the stack and replace the element by its content at the given index
 	template<typename OffsetType1, typename... OffsetTypeOthers>
 	void lookIntoStackTop(OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) const {
 		const int pushed = Pusher<typename std::decay<OffsetType1>::type>::push(*this, offset1);
@@ -446,35 +446,22 @@ private:
 
 		lookIntoStackTop(std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
-
-	void lookIntoStackTop(void* p) const {
-		assert(!p);
-	}
-
-	void lookIntoStackTop(std::nullptr_t) const {
-	}
-	
 	void lookIntoStackTop() const {
 	}
 
 
-	// simple function that reads the top N elements of the stack, pops them, and writes them to "ptr"
+	// simple function that reads the "nb" first top elements of the stack, pops them, and returns the value
 	// warning: first parameter is the number of parameters, not the parameter index
 	// if read generates an exception, stack is poped anyway
-	template<typename R>
-	auto readTopAndPop(int nb, R* ptr) const
-		-> typename std::enable_if<!std::is_void<R>::value>::type
+	template<typename TReturnType>
+	auto readTopAndPop(int nb) const
+		-> TReturnType
 	{
-		auto val = Reader<typename std::decay<R>::type>::testRead(*this, -nb);
-		if (val.is_initialized())
-			*ptr = std::move(val.get());
+		auto val = Reader<typename std::decay<TReturnType>::type>::testRead(*this, -nb);
 		lua_pop(mState, nb);
 		if (!val.is_initialized())
-			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(R)};
-	}
-
-	void readTopAndPop(int nb, void* ptr) const {
-		lua_pop(mState, nb);
+			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(TReturnType)};
+		return std::move(val.get());
 	}
 	
 
@@ -625,19 +612,16 @@ private:
 			} else if (pcallReturnValue == LUA_ERRRUN) {
 				if (lua_isstring(mState, 1)) {
 					// the error is a string
-					std::string errorMsg;
-					readTopAndPop(1, &errorMsg);
-					throw ExecutionErrorException(errorMsg);
+					throw ExecutionErrorException{readTopAndPop<std::string>(1)};
 
 				} else {
 					// an exception_ptr was pushed on the stack
 					// rethrowing it with an additional ExecutionErrorException
-					std::exception_ptr exception;
-					readTopAndPop(1, &exception);
+					const auto exception = readTopAndPop<std::exception_ptr>(1);
 					try {
 						std::rethrow_exception(exception);
 					} catch(...) {
-						std::throw_with_nested(ExecutionErrorException("Exception thrown by a callback function called by Lua"));
+						std::throw_with_nested(ExecutionErrorException{"Exception thrown by a callback function called by Lua"});
 					}
 				}
 			}
@@ -645,9 +629,7 @@ private:
 
 		// pcall succeeded, we pop the returned values and return them
 		try {
-			Out out;
-			readTopAndPop(outArguments, &out);
-			return std::move(out);
+			return readTopAndPop<Out>(outArguments);
 
 		} catch(...) {
 			lua_pop(mState, outArguments);
