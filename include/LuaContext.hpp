@@ -469,7 +469,7 @@ private:
 	// if an exception is triggered, the top of the stack will be removed anyway
 	// In should be a tuple (at least until variadic templates are supported everywhere), Out can be anything
 	template<typename Out, typename In>
-	Out call(const In& in) {
+	Out call(const In& in) const {
 		static_assert(std::tuple_size<In>::value >= 0, "Error: template parameter 'In' should be a tuple");
 
 		int outArguments = 0;
@@ -530,7 +530,7 @@ private:
 	template<typename TType, typename = void>
 	struct Pusher {
 		template<typename TType2>
-		static int push(LuaContext& context, TType2&& value) {
+		static int push(const LuaContext& context, TType2&& value) {
 			// this function is called when lua's garbage collector wants to destroy our object
 			// we simply call its destructor
 			const auto garbageCallbackFunction = [](lua_State* lua) -> int {
@@ -655,7 +655,7 @@ private:
 	// boolean
 	template<>
 	struct Pusher<bool> {
-		static int push(LuaContext& context, bool value) {
+		static int push(const LuaContext& context, bool value) {
 			lua_pushboolean(context.mState, value);
 			return 1;
 		}
@@ -664,7 +664,7 @@ private:
 	// string
 	template<>
 	struct Pusher<std::string> {
-		static int push(LuaContext& context, const std::string& value) {
+		static int push(const LuaContext& context, const std::string& value) {
 			lua_pushstring(context.mState, value.c_str());
 			return 1;
 		}
@@ -673,7 +673,7 @@ private:
 	// const char*
 	template<>
 	struct Pusher<const char*> {
-		static int push(LuaContext& context, const char* value) {
+		static int push(const LuaContext& context, const char* value) {
 			lua_pushstring(context.mState, value);
 			return 1;
 		}
@@ -682,7 +682,7 @@ private:
 	// floating numbers
 	template<typename T>
 	struct Pusher<T, typename std::enable_if<std::is_floating_point<T>::value>::type> {
-		static int push(LuaContext& context, T value) {
+		static int push(const LuaContext& context, T value) {
 			lua_pushnumber(context.mState, value);
 			return 1;
 		}
@@ -691,7 +691,7 @@ private:
 	// integers
 	template<typename T>
 	struct Pusher<T, typename std::enable_if<std::is_integral<T>::value>::type> {
-		static int push(LuaContext& context, T value) {
+		static int push(const LuaContext& context, T value) {
 			lua_pushinteger(context.mState, value);
 			return 1;
 		}
@@ -700,7 +700,7 @@ private:
 	// nil
 	template<>
 	struct Pusher<std::nullptr_t> {
-		static int push(LuaContext& context, std::nullptr_t value) {
+		static int push(const LuaContext& context, std::nullptr_t value) {
 			assert(value == nullptr);
 			lua_pushnil(context.mState);
 			return 1;
@@ -710,7 +710,7 @@ private:
 	// maps
 	template<typename TKey, typename TValue>
 	struct Pusher<std::map<TKey,TValue>> {
-		static int push(LuaContext& context, const std::map<TKey,TValue>& value) {
+		static int push(const LuaContext& context, const std::map<TKey,TValue>& value) {
 			lua_newtable(context.mState);
 
 			for (auto i = value.begin(), e = value.end(); i != e; ++i) {
@@ -726,7 +726,7 @@ private:
 	// unordered_maps
 	template<typename TKey, typename TValue>
 	struct Pusher<std::unordered_map<TKey,TValue>> {
-		static int push(LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
+		static int push(const LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
 			lua_newtable(context.mState);
 
 			for (auto i = value.begin(), e = value.end(); i != e; ++i) {
@@ -742,7 +742,7 @@ private:
 	// vectors
 	template<typename TType>
 	struct Pusher<std::vector<TType>> {
-		static int push(LuaContext& context, const std::vector<TType>& value) {
+		static int push(const LuaContext& context, const std::vector<TType>& value) {
 			lua_newtable(context.mState);
 
 			for (unsigned int i = 0; i < value.size(); ++i) {
@@ -758,7 +758,7 @@ private:
 	// unique_ptr
 	template<typename TType>
 	struct Pusher<std::unique_ptr<TType>> {
-		static int push(LuaContext& context, std::unique_ptr<TType> value) {
+		static int push(const LuaContext& context, std::unique_ptr<TType> value) {
 			return Pusher<std::shared_ptr<TType>>::push(context, std::move(value));
 		}
 	};
@@ -766,7 +766,7 @@ private:
 	// enum
 	template<typename TEnum>
 	struct Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
-		static int push(LuaContext& context, TEnum value) {
+		static int push(const LuaContext& context, TEnum value) {
 			typedef typename std::underlying_type<T>::type	RealType;
 			return Pusher<RealType>::push(context, static_cast<RealType>(value));
 		}
@@ -828,7 +828,7 @@ private:
 										>::type
 				>
 	{
-		static int push(LuaContext& context, TType value) {
+		static int push(const LuaContext& context, TType value) {
 			return context.pushFunction<TType>(value);
 		}
 	};
@@ -836,7 +836,7 @@ private:
 	// std::function
 	template<typename ReturnType, typename... ParamTypes>
 	struct Pusher<std::function<ReturnType (ParamTypes...)>> {
-		static int push(LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
+		static int push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
 			return context.pushFunction<ReturnType (ParamTypes...)>(value);
 		}
 	};
@@ -844,7 +844,7 @@ private:
 	// boost::variant
 	template<typename... TTypes>
 	struct Pusher<boost::variant<TTypes...>> {
-		static int push(LuaContext& context, const boost::variant<TTypes...>& value) {
+		static int push(const LuaContext& context, const boost::variant<TTypes...>& value) {
 			return value.apply_visitor(VariantWriter{context});
 		}
 
@@ -856,21 +856,21 @@ private:
 				return Pusher<std::decay<TType>::type>::push(ctxt, value);
 			}
 
-			VariantWriter(LuaContext& ctxt) : ctxt(ctxt) {}
-			LuaContext& ctxt;
+			VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
+			const LuaContext& ctxt;
 		};
 	};
 
 	// tuple
 	template<typename... TTypes>
 	struct Pusher<std::tuple<TTypes...>> {
-		static int push(LuaContext& context, const std::tuple<TTypes...>& value) {
+		static int push(const LuaContext& context, const std::tuple<TTypes...>& value) {
 			return push2(context, value, std::integral_constant<int,0>{});
 		}
 
 	private:
 		template<int N>
-		static int push2(LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+		static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
 			typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
 			const auto num = Pusher<std::decay<ElemType>::type>::push(context, std::get<N>(value));
 			try {
@@ -881,7 +881,7 @@ private:
 			}
 		}
 		
-		static int push2(LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		static int push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
 			return 0;
 		}
 	};
@@ -902,21 +902,21 @@ private:
 	struct GenerateSequence<0> { typedef Sequence<> type; };
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple, int... S>
-	auto callWithTupleImpl(const TFunctionObject& function, const TTuple& parameters, Sequence<S...>)
+	auto callWithTupleImpl(const TFunctionObject& function, const TTuple& parameters, Sequence<S...>) const
 		-> TRetValue
 	{
 		return function(std::get<S>(parameters)...);
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters)
+	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
 		return std::make_tuple(callWithTupleImpl<TRetValue>(function, parameters, GenerateSequence<std::tuple_size<TTuple>::value>::type()));
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters)
+	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
 		-> typename std::enable_if<std::is_void<TRetValue>::value,std::tuple<>>::type
 	{
 		callWithTupleImpl<TRetValue>(function, parameters, GenerateSequence<std::tuple_size<TTuple>::value>::type());
@@ -929,7 +929,7 @@ private:
 	/*             PUSHING ANY FUNCTION               */
 	/**************************************************/
 	template<typename TFunctionType, typename TFunctionObject>
-	int pushFunction(TFunctionObject fn) {
+	int pushFunction(TFunctionObject fn) const {
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
 		// if we used lua's cfunctions system, we could not detect when the function is no longer in use, which could cause problems
 		// so we use userdata instead
@@ -1242,40 +1242,35 @@ private:
 	};
 	
 	// function
-	template<typename TFunction>
-	struct Reader<std::function<TFunction>>
+	template<typename TRetValue, typename... TParameters>
+	struct Reader<std::function<TRetValue (TParameters...)>>
 	{
+		typedef std::function<TRetValue (TParameters...)>
+			Function;
+
 		static bool test(const LuaContext& context, int index)
 		{
-			return false;
+			return lua_isfunction(context.mState, index) != 0;
 		}
 		
 		static auto read(const LuaContext& context, int index)
-			-> std::function<TFunction>
+			-> Function
 		{
-			throw "NYI";
+			auto beacon = std::make_shared<char>();
 
-			/*typedef typename FnTupleWrapper<FnType>			TupleWrapper;
+			lua_pushlightuserdata(context.mState, beacon.get());
+			lua_pushvalue(context.mState, -2);
+			lua_settable(context.mState, LUA_REGISTRYINDEX);
 
-			lua_pushvalue(mState, index);
-
-			const auto reference = luaL_ref(mState, LUA_REGISTRYINDEX);
-			struct Caller {
-				lua_State*	mState;
-				int			mReference;
-
-				~Caller() {
-					luaL_unref(mState, LUA_REGISTRYINDEX, mReference);
-				}
-
-				FnType operator() {
-					TupleWrapper::
-				}
-			};*/
+			return [&context,beacon](TParameters&&... params) -> TRetValue {
+				lua_pushlightuserdata(context.mState, beacon.get());
+				lua_gettable(context.mState, LUA_REGISTRYINDEX);
+				return context.call<TRetValue>(std::make_tuple(std::forward<TParameters>(params)...));
+			};
 		}
 
 		static auto testRead(const LuaContext& context, int index)
-			-> boost::optional<std::function<TFunction>>
+			-> boost::optional<Function>
 		{
 			if (!test(context, index))
 				return {};
@@ -1283,7 +1278,7 @@ private:
 		}
 
 		static auto readSafe(const LuaContext& context, int index)
-			-> std::function<TFunction>
+			-> Function
 		{
 			if (!test(context, index))
 				throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::function<TFunction>)};

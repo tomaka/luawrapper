@@ -40,11 +40,25 @@ void test4() {
 	if (val != 5)	throw std::logic_error("Test 4 failed");
 }
 
+void test5() {
+	LuaContext context;
+
+	context.executeCode(R"lua(
+		foo = function(i)
+			return i + 2
+		end
+	)lua");
+
+	const auto val = context.readVariable<std::function<int (int)>>("foo");
+	if (val(3) != 5)	throw std::logic_error("Test 5 failed");
+}
+
 int main() {
 	test1();
 	test2();
 	test3();
 	test4();
+	test5();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;
