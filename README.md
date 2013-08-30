@@ -70,6 +70,11 @@ Prints `3` and `8`.
 `writeVariable` supports both `std::function` and native function pointers or references.
 The function's parameters and return type are handled as if they were read and written by `readVariable` and `writeVariable`.
 
+If you pass a function object with a single operator(), you can also auto-detect the function type using `writeFunction`:
+
+    LuaContext lua;
+    lua.writeFunction("show", [](int v) { std::cout << v << std::endl; });
+
 
 #### Example 3: writing custom types
 
@@ -206,15 +211,9 @@ This `AnyValue` can store any lua value, except functions and custom objects.
 
 #### Example 8: returning multiple values
 
-    auto test(int a, int b, int c)
-        -> std::tuple<int,std::string>
-    {
-        return std::make_tuple(a + b + c, "test");
-    }
-
     LuaContext lua;
-    lua.writeVariable("f1", &test);
-
+    lua.writeFunction("f1", [](int a, int b, int c) { return std::make_tuple(a + b + c, "test"); });
+    
     lua.executeCode("a, b = f1(1, 2, 3);");
     
     std::cout << lua.readVariable<int>("a") << std::endl;
