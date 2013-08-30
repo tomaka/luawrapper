@@ -56,6 +56,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #	include "exception.hpp"
 #endif
 
+#if __GNUC__ <= 4 && __GNUC_MINOR__ <= 7
+namespace std {
+	template<typename T>
+	using is_trivially_destructible = has_trivial_destructor<T>;
+}
+#endif
+
 /**
  * Defines a Lua context
  * A Lua context is used to interpret Lua code. Since everything in Lua is a variable (including functions),
@@ -153,7 +160,7 @@ public:
 
 	/// \brief Inverse operation of registerFunction
 	template<typename T>
-	void				unregisterFunction(const std::string& name)										{ _unregisterFunction<T>(name); }
+	void				unregisterFunction(const std::string& name)										{ throw std::logic_error("Not yet implemented"); }
 
 	/**
 	 * Registers a member variable
@@ -359,14 +366,14 @@ private:
 				return ctxt.pushFunction<TRetValue (TParam1, TOtherParams...)>(function);
 			};
 
-		mRegisteredGetters[&typeid(std::decay<TParam1>::type*)][functionName] =
+		mRegisteredGetters[&typeid(typename std::decay<TParam1>::type*)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return ctxt.pushFunction<TRetValue (std::decay<TParam1>::type*, TOtherParams...)>([=](std::decay<TParam1>::type* obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
+				return ctxt.pushFunction<TRetValue (typename std::decay<TParam1>::type*, TOtherParams...)>([=](typename std::decay<TParam1>::type* obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
 			};
 
-		mRegisteredGetters[&typeid(std::shared_ptr<std::decay<TParam1>::type>)][functionName] =
+		mRegisteredGetters[&typeid(std::shared_ptr<typename std::decay<TParam1>::type>)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return ctxt.pushFunction<TRetValue (std::shared_ptr<std::decay<TParam1>::type>, TOtherParams...)>([=](std::shared_ptr<std::decay<TParam1>::type> obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
+				return ctxt.pushFunction<TRetValue (std::shared_ptr<typename std::decay<TParam1>::type>, TOtherParams...)>([=](std::shared_ptr<typename std::decay<TParam1>::type> obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
 			};
 	}
 
@@ -378,7 +385,7 @@ private:
 
 		if (readFunction) {
 			mRegisteredGetters[&typeid(TObject)][name] = [=](const void* object, LuaContext& ctxt) -> int {
-				return Pusher<std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
 			};
 		}
 
@@ -395,7 +402,7 @@ private:
 	{
 		if (readFunction) {
 			mDefaultGetter[&typeid(TObject)] = [=](const void* object, const std::string& name, LuaContext& ctxt) -> int {
-				return Pusher<std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
 			};
 		}
 
@@ -674,7 +681,7 @@ private:
 	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
-		return std::make_tuple(callWithTupleImpl<TRetValue>(function, parameters, GenerateSequence<std::tuple_size<TTuple>::value>::type()));
+		return std::make_tuple(callWithTupleImpl<TRetValue>(function, parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
@@ -705,7 +712,7 @@ private:
 			assert(this->mState == state);
 			
 			// checking if number of parameters is correct
-			const int paramsCount = std::tuple_size<FunctionArguments::Parameters>::value;
+			const int paramsCount = std::tuple_size<typename FunctionArguments::Parameters>::value;
 			if (lua_gettop(state) < paramsCount) {
 				// if not, using lua_error to return an error
 				luaL_where(state, 1);
@@ -719,13 +726,13 @@ private:
 			}
 			
 			// reading parameters from the stack
-			auto parameters = Reader<typename std::decay<FunctionArguments::Parameters>::type>::readSafe(*this, -paramsCount);
+			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*this, -paramsCount);
 
 			// calling the function, note that "result" should be a tuple
-			auto result = callWithTuple<FunctionArguments::ReturnValue>(fn, parameters);
+			auto result = callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
 
 			// pushing the result on the stack and returning number of pushed elements
-			return Pusher<std::decay<decltype(result)>::type>::push(*this, std::move(result));
+			return Pusher<typename std::decay<decltype(result)>::type>::push(*this, std::move(result));
 		};
 		
 		// typedefing the type of data we will push
@@ -931,8 +938,8 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
 		lua_newtable(context.mState);
 
 		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			Pusher<std::decay<TKey>::type>::push(context, i->first);
-			Pusher<std::decay<TValue>::type>::push(context, i->second);
+			Pusher<typename std::decay<TKey>::type>::push(context, i->first);
+			Pusher<typename std::decay<TValue>::type>::push(context, i->second);
 			lua_settable(context.mState, -3);
 		}
 
@@ -947,8 +954,8 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 		lua_newtable(context.mState);
 
 		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			Pusher<std::decay<TKey>::type>::push(context, i->first);
-			Pusher<std::decay<TValue>::type>::push(context, i->second);
+			Pusher<typename std::decay<TKey>::type>::push(context, i->first);
+			Pusher<typename std::decay<TValue>::type>::push(context, i->second);
 			lua_settable(context.mState, -3);
 		}
 
@@ -964,7 +971,7 @@ struct LuaContext::Pusher<std::vector<TType>> {
 
 		for (unsigned int i = 0; i < value.size(); ++i) {
 			lua_pushinteger(context.mState, i);
-			Pusher<std::decay<TType>::type>::push(context, value[i]);
+			Pusher<typename std::decay<TType>::type>::push(context, value[i]);
 			lua_settable(context.mState, -3);
 		}
 
@@ -984,7 +991,7 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 template<typename TEnum>
 struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
 	static int push(const LuaContext& context, TEnum value) {
-		typedef typename std::underlying_type<T>::type	RealType;
+		typedef typename std::underlying_type<TEnum>::type	RealType;
 		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
@@ -1070,7 +1077,7 @@ private:
 		template<typename TType>
 		int operator()(TType value)
 		{
-			return Pusher<std::decay<TType>::type>::push(ctxt, value);
+			return Pusher<typename std::decay<TType>::type>::push(ctxt, value);
 		}
 
 		VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
@@ -1089,7 +1096,7 @@ private:
 	template<int N>
 	static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
-		const auto num = Pusher<std::decay<ElemType>::type>::push(context, std::get<N>(value));
+		const auto num = Pusher<typename std::decay<ElemType>::type>::push(context, std::get<N>(value));
 		try {
 			return num + push2(context, value, std::integral_constant<int,N+1>{});
 		} catch(...) {
@@ -1314,7 +1321,7 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 		-> Function
 	{
 		if (!test(context, index))
-			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::function<TFunction>)};
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Function)};
 		return read(context, index);
 	}
 };
@@ -1348,15 +1355,15 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 				auto value = ValueReader::testRead(context, -1);
 
 				if (!key.is_initialized() || !value.is_initialized()) {
-					lua_pop(mState, 2);		// we remove the value and the key
+					lua_pop(context.mState, 2);		// we remove the value and the key
 					return {};
 				}
 
 				result.insert({ std::move(key.get()), std::move(value.get()) });
-				lua_pop(mState, 1);		// we remove the value but keep the key for the next iteration
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
 
 			} catch(...) {
-				lua_pop(mState, 2);		// we remove the value and the key
+				lua_pop(context.mState, 2);		// we remove the value and the key
 				throw;
 			}
 		}
@@ -1458,7 +1465,7 @@ struct LuaContext::Reader<boost::optional<TType>>
 	static auto read(const LuaContext& context, int index)
 		-> boost::optional<TType>
 	{
-		return lua_isnil(context.mState, index) ? {} : SubReader::read(context, index);
+		return lua_isnil(context.mState, index) ? boost::optional<TType>{} : SubReader::read(context, index);
 	}
 
 	static auto testRead(const LuaContext& context, int index)
@@ -1493,7 +1500,7 @@ private:
 			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
 			if (val.is_initialized())
 				return Variant{std::move(val.get())};
-			return VariantReader<boost::mpl::next<TIterBegin>::type, TIterEnd>::read(ctxt, index);
+			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::read(ctxt, index);
 		}
 	};
 
@@ -1514,8 +1521,8 @@ public:
 	static auto read(const LuaContext& context, int index)
 		-> Variant
 	{
-		typedef boost::mpl::begin<Variant::types>::type		Begin;
-		typedef boost::mpl::end<Variant::types>::type		End;
+		typedef typename boost::mpl::begin<typename Variant::types>::type		Begin;
+		typedef typename boost::mpl::end<typename Variant::types>::type		End;
 
 		return VariantReader<Begin, End>::read(context, index);
 	}
