@@ -707,9 +707,9 @@ private:
 		
 		// we will create a userdata which contains a copy of a lambda function [](lua_State*) -> int
 		// but first we have to create it
-		auto functionToPush = [&,fn](lua_State* state) -> int {			// TODO: problem if we move the lua context
-			// note that I'm using "this->" because of a bug in g++
-			assert(this->mState == state);
+		auto me = this;			// work-around for a g++ bug
+		auto functionToPush = [me,fn](lua_State* state) -> int {			// TODO: problem if we move the lua context
+			assert(me->mState == state);
 			
 			// checking if number of parameters is correct
 			const int paramsCount = std::tuple_size<typename FunctionArguments::Parameters>::value;
@@ -726,13 +726,13 @@ private:
 			}
 			
 			// reading parameters from the stack
-			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*this, -paramsCount);
+			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*me, -paramsCount);
 
 			// calling the function, note that "result" should be a tuple
 			auto result = callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
 
 			// pushing the result on the stack and returning number of pushed elements
-			return Pusher<typename std::decay<decltype(result)>::type>::push(*this, std::move(result));
+			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
 		};
 		
 		// typedefing the type of data we will push
