@@ -108,6 +108,9 @@ Before doing so, you can call "registerFunction" so lua scripts can call the obj
 If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported.
 Function that have been registered for a type also work with all pointers to this type.
 
+However, inheritance is not supported.
+You need to register all a type's functions, even if you have already registered a type's parent's functions.
+
 
 #### Example 4: reading lua code from a file
 
@@ -132,6 +135,7 @@ Note however that `executeCode` will block until it reaches eof. You should take
 Prints `5`.
 
 `readVariable` also supports `std::function`. This allows you to read any function, even the functions created by lua.
+The only types that are supported by `writeVariable` but not by `readVariable` are native function pointers and `unique_ptr`s, for obvious reasons.
 
 **Warning**: calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash).
 
