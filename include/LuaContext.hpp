@@ -1089,7 +1089,8 @@ struct LuaContext::Pusher<std::function<ReturnType (ParamTypes...)>> {
 template<typename... TTypes>
 struct LuaContext::Pusher<boost::variant<TTypes...>> {
 	static int push(const LuaContext& context, const boost::variant<TTypes...>& value) {
-		return value.apply_visitor(VariantWriter{context});
+		VariantWriter writer{context};
+		return value.apply_visitor(writer);
 	}
 
 private:
@@ -1097,7 +1098,7 @@ private:
 		template<typename TType>
 		int operator()(TType value)
 		{
-			return Pusher<typename std::decay<TType>::type>::push(ctxt, value);
+			return Pusher<typename std::decay<TType>::type>::push(ctxt, std::move(value));
 		}
 
 		VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
