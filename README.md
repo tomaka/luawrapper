@@ -53,7 +53,7 @@ All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::strin
 
 Prints `3` and `8`
 
-You can also write function pointers or functors using `writeVariable`. The function's parameters and return type must be supported by the library.
+You can also write function pointers or functors using `writeVariable`. The function's parameters and return type must be supported by `readVariable` and `writeVariable`.
 
 `writeVariable` supports `std::function` and basic function pointers or references.
 
