@@ -53,7 +53,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <lua.hpp>
 
 #ifdef _MSC_VER
-#	include "exception.hpp"
+#	include "misc/exception.hpp"
 #endif
 
 #if defined(__GNUC__) && __GNUC__ <= 4 && __GNUC_MINOR__ <= 7
