@@ -213,7 +213,7 @@ This `AnyValue` can store any lua value, except functions and custom objects.
 
     LuaContext lua;
     lua.writeFunction("f1", [](int a, int b, int c) { return std::make_tuple(a + b + c, "test"); });
-    
+
     lua.executeCode("a, b = f1(1, 2, 3);");
     
     std::cout << lua.readVariable<int>("a") << std::endl;
@@ -243,5 +243,6 @@ This code uses new functionalities from [C++11](http://en.wikipedia.org/wiki/C%2
 Does it compile on:
   * Visual C++ 2012 or below: no
   * Visual C++ 2013: yes
-  * GCC 4.7.2: doesn't compile because of known bug in the compiler
-  * GCC 4.8: not tested, but should probably
+  * gcc 4.7.2: doesn't always compile because of known bug in the compiler
+  * gcc 4.8.1: yes
+  * clang 3.2: yes
