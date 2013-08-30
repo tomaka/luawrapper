@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #	include "exception.hpp"
 #endif
 
-#if __GNUC__ <= 4 && __GNUC_MINOR__ <= 7
+#if defined(__GNUC__) && __GNUC__ <= 4 && __GNUC_MINOR__ <= 7
 namespace std {
 	template<typename T>
 	using is_trivially_destructible = has_trivial_destructor<T>;
