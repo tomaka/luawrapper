@@ -1038,6 +1038,39 @@ private:
 	/**************************************************/
 	/*                   UTILITIES                    */
 	/**************************************************/
+	// structure that will ensure that a certain is stored somewhere in the registry
+	// do not clone ValueInRegistry
+	struct ValueInRegistry {
+		// when calling this constructor, the value must be at the top of the stack
+		// this constructor will clone it in the registry
+		ValueInRegistry(lua_State* lua) : lua{lua}
+		{
+			lua_pushlightuserdata(lua, this);
+			lua_pushvalue(lua, -2);
+			lua_settable(lua, LUA_REGISTRYINDEX);
+		}
+		
+		// destroying the function from the registry
+		~ValueInRegistry()
+		{
+			lua_pushlightuserdata(lua, this);
+			lua_pushnil(lua);
+			lua_settable(lua, LUA_REGISTRYINDEX);
+		}
+
+		// pops the value at the top of the stack
+		void pop()
+		{
+			lua_pushlightuserdata(lua, this);
+			lua_gettable(lua, LUA_REGISTRYINDEX);
+		}
+
+	private:
+		ValueInRegistry(const ValueInRegistry&);
+		ValueInRegistry& operator=(const ValueInRegistry&);
+		lua_State* lua;
+	};
+
 	template<typename T>
 	struct Tupleizer;
 
@@ -1486,15 +1519,10 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 	static auto read(const LuaContext& context, int index)
 		-> Function
 	{
-		auto beacon = std::make_shared<char>();
-
-		lua_pushlightuserdata(context.mState, beacon.get());
-		lua_pushvalue(context.mState, -2);
-		lua_settable(context.mState, LUA_REGISTRYINDEX);
+		auto beacon = std::make_shared<ValueInRegistry>(context.mState);
 
 		return [&context,beacon](TParameters&&... params) -> TRetValue {
-			lua_pushlightuserdata(context.mState, beacon.get());
-			lua_gettable(context.mState, LUA_REGISTRYINDEX);
+			beacon->pop();
 			return context.call<TRetValue>(std::forward<TParameters>(params)...);
 		};
 	}
