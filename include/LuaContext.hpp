@@ -438,7 +438,7 @@ private:
 	// this function takes a value representing the offset to look into
 	template<typename OffsetType1, typename... OffsetTypeOthers>
 	void lookIntoStackTop(OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) const {
-		const int pushed = push(offset1);
+		const int pushed = Pusher<typename std::decay<OffsetType1>::type>::push(*this, offset1);
 		if (pushed >= 2)
 			lua_pop(mState, pushed - 1);
 		lua_gettable(mState, -2);

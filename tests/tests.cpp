@@ -65,10 +65,13 @@ void test6() {
 
 	const auto val1 = lua.executeCode<bool>("return a.test");
     const auto val2 = lua.executeCode<float>("return a[2]");
+    const auto val3 = lua.readVariable<float>("a", "world");
 
 	if (val1 != true)
 		throw std::logic_error("Test 6 failed");
 	if (val2 != 6.4f)
+		throw std::logic_error("Test 6 failed");
+	if (val3 != -7.6f)
 		throw std::logic_error("Test 6 failed");
 }
 
