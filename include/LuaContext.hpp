@@ -998,7 +998,7 @@ private:
 
 		// we copy the function object onto the stack
 		const auto functionObjectLocation = static_cast<TFunctionObject*>(lua_newuserdata(mState, sizeof(TFunctionObject)));
-		new (functionObjectLocation) TFunctionObject{std::move(fn)};
+		new (functionObjectLocation) TFunctionObject(std::move(fn));
 				
 		// finally pushing the function
 		lua_pushcclosure(mState, function, 1);
