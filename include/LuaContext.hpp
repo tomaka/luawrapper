@@ -696,7 +696,7 @@ private:
 	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
 		-> typename std::enable_if<std::is_void<TRetValue>::value,std::tuple<>>::type
 	{
-		callWithTupleImpl<TRetValue>(function, parameters, GenerateSequence<std::tuple_size<TTuple>::value>::type());
+		callWithTupleImpl<TRetValue>(function, parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type());
 		return std::tuple<>();
 	}
 
@@ -711,47 +711,49 @@ private:
 		// if we used lua's cfunctions system, we could not detect when the function is no longer in use, which could cause problems
 		// so we use userdata instead
 
-		typedef FunctionArgumentsGetter<TFunctionType>		FunctionArguments;
+		typedef FunctionArgumentsGetter<TFunctionType>
+			FunctionArguments;
 		
-		// we will create a userdata which contains a copy of a lambda function [](lua_State*) -> int
+		// we will create a userdata which contains a copy of a function object "int(lua_State*)"
 		// but first we have to create it
-		auto me = this;			// work-around for a g++ bug
-		auto functionToPush = [me,fn](lua_State* state) -> int {			// TODO: problem if we move the lua context
-			assert(me->mState == state);
+		struct Function {
+			int operator()(lua_State* state) {
+				assert(me->mState == state);
 			
-			// checking if number of parameters is correct
-			const int paramsCount = std::tuple_size<typename FunctionArguments::Parameters>::value;
-			if (lua_gettop(state) < paramsCount) {
-				// if not, using lua_error to return an error
-				luaL_where(state, 1);
-				lua_pushstring(state, "This function requires at least ");
-				lua_pushnumber(state, paramsCount);
-				lua_pushstring(state, " parameter(s)");
-				lua_concat(state, 4);
+				// checking if number of parameters is correct
+				const int paramsCount = std::tuple_size<typename FunctionArguments::Parameters>::value;
+				if (lua_gettop(state) < paramsCount) {
+					// if not, using lua_error to return an error
+					luaL_where(state, 1);
+					lua_pushstring(state, "This function requires at least ");
+					lua_pushnumber(state, paramsCount);
+					lua_pushstring(state, " parameter(s)");
+					lua_concat(state, 4);
 
-				// lua_error throws an exception when compiling as C++
-				return lua_error(state);
+					// lua_error throws an exception when compiling as C++
+					return lua_error(state);
+				}
+			
+				// reading parameters from the stack
+				auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*me, -paramsCount);
+
+				// calling the function, note that "result" should be a tuple
+				auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
+
+				// pushing the result on the stack and returning number of pushed elements
+				return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
 			}
-			
-			// reading parameters from the stack
-			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*me, -paramsCount);
 
-			// calling the function, note that "result" should be a tuple
-			auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
-
-			// pushing the result on the stack and returning number of pushed elements
-			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
+			LuaContext const* me;
+			TFunctionObject fn;
 		};
-		
-		// typedefing the type of data we will push
-		typedef decltype(functionToPush)	FunctionPushType;
 		
 		// this function is called when the lua script tries to call our custom data type
 		// what we do is we simply call the function
 		const auto callCallback = [](lua_State* lua) -> int {
 			assert(lua_gettop(lua) >= 1);
 			assert(lua_isuserdata(lua, 1));
-			FunctionPushType* function = static_cast<FunctionPushType*>(lua_touserdata(lua, 1));
+			auto function = static_cast<Function*>(lua_touserdata(lua, 1));
 			assert(function);
 			return (*function)(lua);
 		};
@@ -760,17 +762,17 @@ private:
 		// we call std::function<int (lua_State*)>'s destructor
 		const auto garbageCallback = [](lua_State* lua) -> int {
 			assert(lua_gettop(lua) == 1);
-			FunctionPushType* function = static_cast<FunctionPushType*>(lua_touserdata(lua, 1));
+			auto function = static_cast<Function*>(lua_touserdata(lua, 1));
 			assert(function);
-			function->~FunctionPushType();
+			function->~Function();
 			return 0;
 		};
 
 		// creating the object
 		// lua_newuserdata allocates memory in the internals of the lua library and returns it so we can fill it
 		//   and that's what we do with placement-new
-		FunctionPushType* const functionLocation = static_cast<FunctionPushType*>(lua_newuserdata(mState, sizeof(FunctionPushType)));
-		new (functionLocation) FunctionPushType(std::move(functionToPush));
+		const auto functionLocation = static_cast<Function*>(lua_newuserdata(mState, sizeof(Function)));
+		new (functionLocation) Function{this, std::move(fn)};
 
 		// creating the metatable (over the object on the stack)
 		// lua_settable pops the key and value we just pushed, so stack management is easy
@@ -779,12 +781,12 @@ private:
 		lua_pushstring(mState, "__call");
 		lua_pushcfunction(mState, callCallback);
 		lua_settable(mState, -3);
-		lua_pushstring(mState, "_typeid");
-		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(decltype(fn))));
-		lua_settable(mState, -3);
-		lua_pushstring(mState, "__gc");
-		lua_pushcfunction(mState, garbageCallback);
-		lua_settable(mState, -3);
+
+		if (!std::is_trivially_destructible<Function>::value) {
+			lua_pushstring(mState, "__gc");
+			lua_pushcfunction(mState, garbageCallback);
+			lua_settable(mState, -3);
+		}
 
 		// at this point, the stack contains the object at offset -2 and the metatable at offset -1
 		// lua_setmetatable will bind the two together and pop the metatable
