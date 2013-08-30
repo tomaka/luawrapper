@@ -51,7 +51,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 #include <lua.hpp>
-#include "include/exception.hpp"
+
+#ifdef _MSC_VER
+#	include "exception.hpp"
+#endif
 
 /**
  * Defines a Lua context
@@ -433,7 +436,11 @@ private:
 
 		// we create an instance of Reader, and we call lua_load
 		Reader reader{code};
-		auto loadReturnValue = lua_load(mState, &Reader::read, &reader, "chunk", nullptr);
+		auto loadReturnValue = lua_load(mState, &Reader::read, &reader, "chunk"
+#			if LUA_VERSION_NUM >= 502
+				, nullptr
+#			endif
+		);
 
 		// now we have to check return value
 		if (loadReturnValue != 0) {
