@@ -129,7 +129,10 @@ In this example we return at the same time an int and a string.
 ### Compilation
 This code uses new functionalities from [C++11](http://en.wikipedia.org/wiki/C%2B%2B11).
 
+[![build status](https://secure.travis-ci.org/Tomaka17/luawrapper.png)](http://travis-ci.org/Tomaka17/luawrapper)
+
 Does it compile on:
   * Visual C++ 2012 or below: no
   * Visual C++ 2013: yes
-  * GCC 4.8: no tested yet
+  * GCC 4.7.2: doesn't compile because of known bug in the compiler
+  * GCC 4.8: not tested, but should probably
