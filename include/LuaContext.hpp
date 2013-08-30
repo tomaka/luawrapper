@@ -178,7 +178,7 @@ public:
 	void executeCode(std::istream& code)
 	{
 		load(code);
-		call<std::tuple<>>(std::tuple<>());
+		call<std::tuple<>>();
 	}
 
 	/**
@@ -191,7 +191,7 @@ public:
 		-> TType
 	{
 		load(code);
-		return call<TType>(std::tuple<>());
+		return call<TType>();
 	}
 
 	/**
@@ -222,7 +222,7 @@ public:
 	void executeCode(const char* code)
 	{
 		load(code);
-		call<std::tuple<>>(std::tuple<>());
+		call<std::tuple<>>();
 	}
 
 	/*
@@ -235,7 +235,7 @@ public:
 		-> TType
 	{
 		load(code);
-		return call<TType>(std::tuple<>());
+		return call<TType>();
 	}
 	
 	/**
@@ -433,7 +433,11 @@ private:
 	std::unordered_map<const std::type_info*,std::function<int (const void*, const std::string&, LuaContext&)>>					mDefaultGetter;
 	std::unordered_map<const std::type_info*,std::unordered_map<std::string, std::function<void (void*, LuaContext&)>>>			mRegisteredSetters;
 	std::unordered_map<const std::type_info*,std::function<void (void*, const std::string&, LuaContext&)>>						mDefaultSetter;
+
 	
+	/**************************************************/
+	/*                     MISC                       */
+	/**************************************************/
 	// this function takes a value representing the offset to look into
 	// it will look into the top element of the stack and replace the element by its content at the given index
 	template<typename OffsetType1, typename... OffsetTypeOthers>
@@ -567,11 +571,15 @@ private:
 			// there was an error during loading, an error message was pushed on the stack
 			const std::string errorMsg = lua_tostring(mState, -1);
 			lua_pop(mState, 1);
-			if (loadReturnValue == LUA_ERRMEM)				throw std::bad_alloc();
-			else if (loadReturnValue == LUA_ERRSYNTAX)		throw SyntaxErrorException{errorMsg};
+			if (loadReturnValue == LUA_ERRMEM)
+				throw std::bad_alloc();
+			else if (loadReturnValue == LUA_ERRSYNTAX)
+				throw SyntaxErrorException{errorMsg};
 		}
 	}
-
+	
+	// this function loads data and pushes a function at the top of the stack
+	// throws in case of syntax error
 	void load(const char* code) {
 		auto loadReturnValue = luaL_loadstring(mState, code);
 
@@ -580,25 +588,31 @@ private:
 			// there was an error during loading, an error message was pushed on the stack
 			const std::string errorMsg = lua_tostring(mState, -1);
 			lua_pop(mState, 1);
-			if (loadReturnValue == LUA_ERRMEM)				throw std::bad_alloc();
-			else if (loadReturnValue == LUA_ERRSYNTAX)		throw SyntaxErrorException{errorMsg};
+			if (loadReturnValue == LUA_ERRMEM)
+				throw std::bad_alloc();
+			else if (loadReturnValue == LUA_ERRSYNTAX)
+				throw SyntaxErrorException{errorMsg};
 		}
 	}
 
 	// this function calls what is on the top of the stack and removes it (just like lua_call)
 	// if an exception is triggered, the top of the stack will be removed anyway
 	// In should be a tuple (at least until variadic templates are supported everywhere), Out can be anything
-	template<typename Out, typename In>
-	Out call(const In& in) const {
-		static_assert(std::tuple_size<In>::value >= 0, "Error: template parameter 'In' should be a tuple");
-
-		int outArguments = 0;
+	template<typename TReturnType, typename... TParameters>
+	auto call(TParameters&&... input) const
+		-> TReturnType
+	{
+		typedef typename Tupleizer<TReturnType>::type
+			RealReturnType;
+		const int outArguments = std::tuple_size<RealReturnType>::value;
 		int inArguments = 0;
 		try {
 			// we push the parameters on the stack
-			outArguments = std::tuple_size<typename Tupleizer<Out>::type>::value;
-			inArguments = Pusher<In>::push(*this, in);
-		} catch(...) { lua_pop(mState, 1); throw; }
+			inArguments = Pusher<std::tuple<TParameters...>>::push(*this, std::make_tuple(std::forward<TParameters>(input)...));
+		} catch(...) {
+			lua_pop(mState, 1);
+			throw;
+		}
 
 		// calling pcall automatically pops the parameters and pushes output
 		const auto pcallReturnValue = lua_pcall(mState, inArguments, outArguments, 0);
@@ -607,7 +621,7 @@ private:
 		if (pcallReturnValue != 0) {
 			// an error occured during execution, either an error message or a std::exception_ptr was pushed on the stack
 			if (pcallReturnValue == LUA_ERRMEM) {
-				throw std::bad_alloc();
+				throw std::bad_alloc{};
 
 			} else if (pcallReturnValue == LUA_ERRRUN) {
 				if (lua_isstring(mState, 1)) {
@@ -617,9 +631,8 @@ private:
 				} else {
 					// an exception_ptr was pushed on the stack
 					// rethrowing it with an additional ExecutionErrorException
-					const auto exception = readTopAndPop<std::exception_ptr>(1);
 					try {
-						std::rethrow_exception(exception);
+						std::rethrow_exception(readTopAndPop<std::exception_ptr>(1));
 					} catch(...) {
 						std::throw_with_nested(ExecutionErrorException{"Exception thrown by a callback function called by Lua"});
 					}
@@ -629,7 +642,7 @@ private:
 
 		// pcall succeeded, we pop the returned values and return them
 		try {
-			return readTopAndPop<Out>(outArguments);
+			return readTopAndPop<TReturnType>(outArguments);
 
 		} catch(...) {
 			lua_pop(mState, outArguments);
@@ -962,7 +975,8 @@ private:
 	/**************************************************/
 	/*                   UTILITIES                    */
 	/**************************************************/
-	template<typename T> struct Tupleizer;
+	template<typename T>
+	struct Tupleizer;
 
 	template<typename TFunctionType>
 	struct FunctionArgumentsGetter {};
@@ -981,10 +995,12 @@ struct LuaContext::GenerateSequence<0> { typedef Sequence<> type; };
 // this structure takes a template parameter T
 // if T is a tuple, it returns T ; if T is not a tuple, it returns std::tuple<T>
 // we have to use this structure because std::tuple<std::tuple<...>> triggers a bug in both MSVC++ and GCC
-template<typename T> struct LuaContext::Tupleizer						{ typedef std::tuple<T> type; };
-/*template<typename... Args>
-struct LuaContext::Tupleizer<std::tuple<Args...>>						{ typedef std::tuple<Args...> type; };*/
-template<> struct LuaContext::Tupleizer<void>							{ typedef std::tuple<> type; };	
+template<typename T>
+struct LuaContext::Tupleizer						{ typedef std::tuple<T>			type; };
+template<typename... Args>
+struct LuaContext::Tupleizer<std::tuple<Args...>>	{ typedef std::tuple<Args...>	type; };
+template<>
+struct LuaContext::Tupleizer<void>					{ typedef std::tuple<>			type; };	
 
 
 
@@ -1440,7 +1456,7 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 		return [&context,beacon](TParameters&&... params) -> TRetValue {
 			lua_pushlightuserdata(context.mState, beacon.get());
 			lua_gettable(context.mState, LUA_REGISTRYINDEX);
-			return context.call<TRetValue>(std::make_tuple(std::forward<TParameters>(params)...));
+			return context.call<TRetValue>(std::forward<TParameters>(params)...);
 		};
 	}
 
