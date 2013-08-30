@@ -660,12 +660,8 @@ private:
 	struct Sequence {};
 	template<typename Sequence>
 	struct IncrementSequence {};
-	template<int... S>
-	struct IncrementSequence<Sequence<S...>> { typedef typename Sequence<S..., sizeof...(S)> type; };
 	template<int N>
 	struct GenerateSequence { typedef typename IncrementSequence<typename GenerateSequence<N - 1>::type>::type type; };
-	template<>
-	struct GenerateSequence<0> { typedef Sequence<> type; };
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple, int... S>
 	auto callWithTupleImpl(const TFunctionObject& function, const TTuple& parameters, Sequence<S...>) const
@@ -854,16 +850,10 @@ private:
 	};
 };
 
-template<typename T>
-struct IsFunctor {
-	typedef char one;
-	typedef long two;
-
-	template <typename C> static one test(decltype(&C::operator())) ;
-	template <typename C> static two test(...);
-
-	enum { value = sizeof(test<T>(0)) == sizeof(char) };
-};
+template<int... S>
+struct LuaContext::IncrementSequence<LuaContext::Sequence<S...>> { typedef Sequence<S..., sizeof...(S)> type; };
+template<>
+struct LuaContext::GenerateSequence<0> { typedef Sequence<> type; };
 
 // this structure takes a template parameter T
 // if T is a tuple, it returns T ; if T is not a tuple, it returns std::tuple<T>
