@@ -135,6 +135,7 @@ Note however that `executeCode` will block until it reaches eof. You should take
 Prints `5`.
 
 `readVariable` also supports `std::function`. This allows you to read any function, even the functions created by lua.
+
 The only types that are supported by `writeVariable` but not by `readVariable` are native function pointers and `unique_ptr`s, for obvious reasons.
 
 **Warning**: calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash).
@@ -146,7 +147,7 @@ If you want to read a value but don't know in advance whether it is of type A or
 
     LuaContext lua;
 
-    lua.writeVariable("foo", std::function<void (boost::variant<std::string,bool>)>{
+    lua.writeFunction("foo", 
         [](boost::variant<std::string,bool> value)
         {
             if (value.which() == 0) {
@@ -155,7 +156,7 @@ If you want to read a value but don't know in advance whether it is of type A or
                 std::cout << "Value is a bool: " << boost::get<bool>(value);
             }
         }
-    });
+    );
 
     lua.executeCode("foo(\"hello\")");
     lua.executeCode("foo(true)");
