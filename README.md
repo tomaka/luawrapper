@@ -28,7 +28,7 @@ All the other files in the source code are only for testing purposes.
 ### Why should I not use it?
 * requires support for [C++11](http://en.wikipedia.org/wiki/C%2B%2B11), the latest C++ standard
 * requires [Boost](boost.org)
-* polymorphic functions not (yet) supported
+* inheritance not supported (and won't be supported until some reflection is added to the C++ language)
 
 ### Examples
 All the examples are in C++, except of course the parameter passed to "executeCode".
