@@ -35,25 +35,27 @@ All the examples are in C++, except of course the parameter passed to "executeCo
 
 #### Example 1: reading and writing variables
 
-    Lua::LuaContext lua;
+    LuaContext lua;
     lua.writeVariable("x", 5);
     lua.executeCode("x = x + 2;");
     std::cout << lua.readVariable<int>("x") << std::endl;
 
-Prints 7
+Prints `7`
 
-Supported types for reading and writing include: int, long, float, double, bool and std::string.
+All basic language types (`int`, `float`, `bool`, `char`, ...), plus std::string, can be read or written.
 
 #### Example 2: giving functions to lua
 
-    Lua::LuaContext lua;
-    lua.writeVariable("show", [](int v) { std::cout << v << std::endl; });
+    LuaContext lua;
+    lua.writeVariable<std::function<int (int)>>("show", [](int v) { std::cout << v << std::endl; });
     lua.executeCode("show(3);");
     lua.executeCode("show(8);");
 
-Prints 3 and 8
+Prints `3` and `8`
 
-You can also write function pointers or functors using "writeVariable". You can't read them with "readVariable" (will give a compilation error). The types of the function's parameters must be supported by "readVariable", and the return type of the function must be supported by "writeVariable".
+You can also write function pointers or functors using `writeVariable`. The function's parameters and return type must be supported by the library.
+
+`writeVariable` supports `std::function` and basic function pointers or references.
 
 
 #### Example 3: writing custom types
@@ -67,54 +69,80 @@ You can also write function pointers or functors using "writeVariable". You can'
      int value;
     };
     
-    Lua::LuaContext lua;
+    LuaContext lua;
     lua.registerFunction("increment", &Object::increment);
     
-    lua.writeVariable("obj", std::unique_ptr<Object>(new Object()));
+    lua.writeVariable("obj", Object{});
     lua.executeCode("obj:increment();");
 
-Prints "incrementing".
+Prints `incrementing`.
 
-In addition to basic types and functions, you can pass any object to `writeVariable`, including raw pointers, std::unique_ptr and std::shared_ptr.
+In addition to basic types and functions, you can pass any object to `writeVariable`, including raw pointers, std::unique_ptr and std::shared_ptr. The object will then be copied into lua.
 Before doing so, you can call "registerFunction" so lua scripts can call the object's functions just like in the example above.
 
+`readVariable` can be used to read a copy of the object.
 
-#### Example 4: reading back custom types
-(we reuse the code from previous example without the call to executeCode)
+If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Function that have been registered for a type also work with raw pointers and `shared_ptr`s of this type.
 
-    lua.readVariable<std::shared_ptr<Object>>("obj")->increment();
 
-    lua.writeVariable("getVal", [](std::shared_ptr<Object> g) { return g->value; });
+#### Example 4: reading lua code from a file
 
-    lua.executeCode("value = getVal(obj);");
-
-    std::cout << lua.readVariable<int>("value") << std::endl;
-
-Prints "incrementing" (first line) and "11" (last line).
-
-First line shows that you can read std::shared_ptr using "readVariable". You can't read std::unique_ptrs since we don't want to remove the object from lua. Note that for the moment this library doesn't check whether the types are matching.
-
-At line 3, we write a function named "getVal" which takes as parameter a shared_ptr of type "Game" and returns its "value" member variable. Then we call this function inside lua with our "game" object as parameter. This demonstrates what I wrote above: the available types for functions parameters are the same as the ones supported by "readVariable".
-
-#### Example 5: reading lua code from a file
-
-    Lua::LuaContext lua;
+    LuaContext lua;
     lua.executeCode(std::ifstream("script.lua"));
 
 This simple example shows that you can easily read lua code (including pre-compiled) from a file.
 
 If you write your own derivate of std::istream (for example a decompressor), you can of course also use it.
-Note however that `executeCode` will block until it reaches eof. So if you use a custom derivate of std::istream which waits for data, the execution will be blocked.
+Note however that `executeCode` will block until it reaches eof. So if you use a custom derivate of std::istream which awaits for data, the execution will be blocked.
 
 
-#### Example 6: using arrays
-_To do_
+#### Example 5: executing lua functions
 
-#### Example 7 : returning multiple values
+    LuaContext lua;
 
-    Lua::LuaContext lua;
+    lua.executeCode("foo = function(i) return i + 2 end");
+
+    const auto function = lua.readVariable<std::function<int (int)>>("foo");
+    std::cout << function(3) << std::endl;
+
+Prints `5`.
+
+`readVariable` also supports `std::function`. This allows you to read any function, even the functions created by lua.
+
+*Warning*: calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash).
+
+
+#### Example 6: handling arrays and more complex types
+
+`writeVariable` and `readVariable` support `std::vector`, `std::map`, `std::unordered_map`, `boost::optional` and `boost::variant`.
+This allows you to do more complicated things, like this:
     
-    lua.writeVariable("f1", [](int a, int b, int c) { return std::make_tuple(a+b+c, "test"); });
+    LuaContext lua;
+
+    lua.writeVariable("a",
+        std::vector< std::pair< boost::variant<int,std::string>, boost::variant<bool,float> > >
+        {
+            { "test", true },
+            { 2, 6.4f },
+            { "hello", 1.f },
+            { "world", -7.6f },
+            { 18, false }
+        }
+    );
+
+    std::cout << lua.executeCode<bool>("return a.test") << std::endl;
+    std::cout << lua.executeCode<float>("return a[2]") << std::endl;
+
+Prints `true` and `6.4`
+
+A `std::vector` of `std::pair`s is automatically treated as an array by lua. Same for `std::map` and `std::unordered_map`.
+`boost::variant` allows you to read a value whose type is not precisely known in advance.
+
+#### Example 7: returning multiple values
+
+    LuaContext lua;
+    
+    lua.writeVariable<std::function<std::tuple<int,std::string> (int,int,int)>>("f1", [](int a, int b, int c) { return std::make_tuple(a+b+c, "test"); });
     lua.executeCode("a,b = f1(1, 2, 3);");
     
     std::cout << lua.readVariable<int>("a") << std::endl;
@@ -124,6 +152,16 @@ Prints `6` and `test`
 
 A function can return multiple values by returning a tuple.
 In this example we return at the same time an int and a string.
+
+#### Example 8: destroying a lua variable
+
+    LuaContext lua;
+    
+    lua.writeVariable("a", 2);
+
+    lua.writeVariable("a", nullptr);        // destroys a
+
+The C++ equivalent for `nil` is `nullptr`.
 
 
 ### Compilation

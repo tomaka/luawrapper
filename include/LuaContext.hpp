@@ -284,7 +284,9 @@ public:
 	/// \brief
 	template<typename FunctionType, typename FunctionObject>
 	void writeFunction(const std::string& variableName, const FunctionObject& functionObject) {
-		
+		const int pushedElems = pushFunction<FunctionType>(functionObject);
+		try { setGlobal(variableName); } catch(...) { lua_pop(mState, pushedElems); throw; }
+		if (pushedElems >= 2) lua_pop(mState, pushedElems - 1);
 	}
 
 
@@ -963,6 +965,22 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 	}
 };
 
+// vectors or pairs
+template<typename TType1, typename TType2>
+struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
+	static int push(const LuaContext& context, const std::vector<std::pair<TType1,TType2>>& value) {
+		lua_newtable(context.mState);
+
+		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
+			Pusher<typename std::decay<TType1>::type>::push(context, i->first);
+			Pusher<typename std::decay<TType2>::type>::push(context, i->second);
+			lua_settable(context.mState, -3);
+		}
+
+		return 1;
+	}
+};
+
 // vectors
 template<typename TType>
 struct LuaContext::Pusher<std::vector<TType>> {
@@ -1197,7 +1215,7 @@ struct LuaContext::Reader<
 	static auto read(const LuaContext& context, int index)
 		-> TType
 	{
-		return lua_tonumber(context.mState, index);
+		return static_cast<TType>(lua_tonumber(context.mState, index));
 	}
 
 	static auto testRead(const LuaContext& context, int index)
@@ -1324,6 +1342,70 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 	{
 		if (!test(context, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Function)};
+		return read(context, index);
+	}
+};
+
+// vector of pairs
+template<typename TType1, typename TType2>
+struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
+{
+	typedef std::vector<std::pair<TType1,TType2>>
+		Vector;
+	typedef Reader<typename std::decay<TType1>::type>
+		Type1Reader;
+	typedef Reader<typename std::decay<TType2>::type>
+		Type2Reader;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_istable(context.mState, index);
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> Vector
+	{
+		Vector result;
+
+		// we traverse the table at the top of the stack
+		// TODO: handle exceptions
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto val1 = Type1Reader::testRead(context, -2);
+				auto val2 = Type2Reader::testRead(context, -1);
+
+				if (!val1.is_initialized() || !val2.is_initialized()) {
+					lua_pop(context.mState, 2);		// we remove the value and the key
+					return {};
+				}
+
+				result.push_back({ std::move(val1.get()), std::move(val2.get()) });
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(context.mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<Vector>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> Vector
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Vector)};
 		return read(context, index);
 	}
 };

@@ -43,14 +43,33 @@ void test4() {
 void test5() {
 	LuaContext context;
 
-	context.executeCode(R"lua(
-		foo = function(i)
-			return i + 2
-		end
-	)lua");
+	context.executeCode("foo = function(i) return i + 2 end");
 
 	const auto val = context.readVariable<std::function<int (int)>>("foo");
 	if (val(3) != 5)	throw std::logic_error("Test 5 failed");
+}
+
+void test6() {
+	LuaContext lua;
+
+    lua.writeVariable("a",
+        std::vector< std::pair< boost::variant<int,std::string>, boost::variant<bool,float> >>
+        {
+            { "test", true },
+            { 2, 6.4f },
+            { "hello", 1.f },
+            { "world", -7.6f },
+            { 18, false }
+        }
+    );
+
+	const auto val1 = lua.executeCode<bool>("return a.test");
+    const auto val2 = lua.executeCode<float>("return a[2]");
+
+	if (val1 != true)
+		throw std::logic_error("Test 6 failed");
+	if (val2 != 6.4f)
+		throw std::logic_error("Test 6 failed");
 }
 
 int main() {
@@ -59,6 +78,7 @@ int main() {
 	test3();
 	test4();
 	test5();
+	test6();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;
