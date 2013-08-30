@@ -34,7 +34,7 @@ void test3() {
 void test4() {
 	LuaContext context;
 
-	context.writeVariable<std::function<int (int)>>("foo", [](int i) { return i + 2; });
+	context.writeFunction("foo", [](int i) { return i + 2; });
 
 	const auto val = context.executeCode<int>("return foo(3)");
 	if (val != 5)	throw std::logic_error("Test 4 failed");

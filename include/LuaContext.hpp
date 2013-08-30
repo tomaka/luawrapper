@@ -400,8 +400,8 @@ public:
 	 * Same as writeVariable but you don't need to convert the parameter to a std::function
 	 */
 	template<typename FunctionType, typename FunctionObject>
-	void writeFunction(const std::string& variableName, const FunctionObject& functionObject) {
-		const int pushedElems = pushFunction<FunctionType>(functionObject);
+	void writeFunction(const std::string& variableName, FunctionObject functionObject) {
+		const int pushedElems = pushFunction<FunctionType>(std::move(functionObject));
 		try {
 			lua_setglobal(mState, variableName.c_str());
 		} catch(...) {
@@ -410,6 +410,15 @@ public:
 		}
 		if (pushedElems >= 2)
 			lua_pop(mState, pushedElems - 1);
+	}
+
+	/**
+	 * Does the same as writeVariable, except that the function type is automatically detected
+	 * This only works if the data is either a native function pointer, or contains one operator() (this is the case for lambdas)
+	 */
+	template<typename TFunctionObject>
+	void writeFunction(const std::string& variableName, TFunctionObject functionObject) {
+		writeFunction<typename FunctionTypeDetector<TFunctionObject>::type>(variableName, std::move(functionObject));
 	}
 
 
@@ -985,6 +994,14 @@ private:
 		typedef std::tuple<TParams...>		Parameters;
 		typedef TRetValue					ReturnValue;
 	};
+
+	// this structure takes a pointer to a member function type and returns the base function type
+	template<typename TType>
+	struct RemoveMemberPointerFunction { typedef void type; };			// required because of a bug
+
+	// this structure takes any object and detects its function type
+	template<typename TObjectType>
+	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&TObjectType::operator())>::type type; };
 };
 
 template<int... S>
@@ -1000,8 +1017,23 @@ struct LuaContext::Tupleizer						{ typedef std::tuple<T>			type; };
 template<typename... Args>
 struct LuaContext::Tupleizer<std::tuple<Args...>>	{ typedef std::tuple<Args...>	type; };
 template<>
-struct LuaContext::Tupleizer<void>					{ typedef std::tuple<>			type; };	
+struct LuaContext::Tupleizer<void>					{ typedef std::tuple<>			type; };
 
+// this structure takes any object and detects its function type
+template<typename TRetValue, typename... TParameters>
+struct LuaContext::FunctionTypeDetector<TRetValue (TParameters...)>				{ typedef TRetValue type(TParameters...); };
+template<typename TObjectType>
+struct LuaContext::FunctionTypeDetector<TObjectType*>							{ typedef typename FunctionTypeDetector<TObjectType>::type type; };
+
+// this structure takes a pointer to a member function type and returns the base function type
+template<typename TType, typename TRetValue, typename... TParameters>
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...)>		{ typedef TRetValue type(TParameters...); };
+template<typename TType, typename TRetValue, typename... TParameters>
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const>		{ typedef TRetValue type(TParameters...); };
+template<typename TType, typename TRetValue, typename... TParameters>
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) volatile>		{ typedef TRetValue type(TParameters...); };
+template<typename TType, typename TRetValue, typename... TParameters>
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const volatile>		{ typedef TRetValue type(TParameters...); };
 
 
 
