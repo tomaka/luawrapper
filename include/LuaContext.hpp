@@ -988,6 +988,7 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 };
 
 // enum
+#if !defined(__clang__) || __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 2)
 template<typename TEnum>
 struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
 	static int push(const LuaContext& context, TEnum value) {
@@ -995,6 +996,7 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
+#endif
 
 // pushing a C function
 /*template<typename FunctionType>
