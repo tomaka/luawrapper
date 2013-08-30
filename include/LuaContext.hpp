@@ -729,7 +729,7 @@ private:
 			auto parameters = Reader<typename std::decay<typename FunctionArguments::Parameters>::type>::readSafe(*me, -paramsCount);
 
 			// calling the function, note that "result" should be a tuple
-			auto result = callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
+			auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
 
 			// pushing the result on the stack and returning number of pushed elements
 			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
