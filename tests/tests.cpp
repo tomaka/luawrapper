@@ -118,6 +118,19 @@ void test9() {
 		throw std::logic_error("Test 9 failed");
 }
 
+void test10() {
+    LuaContext lua;
+	lua.writeFunction("a", [](int x) { return std::make_tuple(x, x+1, x+2); });
+	lua.executeCode("b, c, d = a(1)");
+
+    if (lua.executeCode<int>("return b") != 1)
+		throw std::logic_error("Test 10 failed");
+    if (lua.executeCode<int>("return c") != 2)
+		throw std::logic_error("Test 10 failed");
+    if (lua.executeCode<int>("return d") != 3)
+		throw std::logic_error("Test 10 failed");
+}
+
 int main() {
 	test1();
 	test2();
@@ -128,6 +141,7 @@ int main() {
 	test7();
 	test8();
 	test9();
+	test10();
 
 	std::cout << "All tests are successful" << std::endl;
 	return 0;
