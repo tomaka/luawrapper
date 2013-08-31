@@ -117,7 +117,7 @@ If you don't want to manipulate copies, you should write and read pointers inste
 Function that have been registered for a type also work with all pointers to this type.
 
 However, inheritance is not supported.
-You need to register all a type's functions, even if you have already registered a type's parent's functions.
+You need to register all of a type's functions, even if you have already registered a type's parent's functions.
 
 
 #### Example 4: reading lua code from a file
@@ -201,13 +201,10 @@ Prints `true` and `6.4`.
 
 You can also use `readVariable` to directly read inside an array.
     
-    LuaContext lua;
-    lua.executeCode("a = { 9, 8, 7, 6 };");
-    std::cout << lua.readVariable("a", 1) << std::endl;
+    std::cout << lua.readVariable("a", "test") << std::endl;
+    std::cout << lua.readVariable("a", 2) << std::endl;
 
-Prints `8`.
-
-Remember that you can created recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
+Remember that you can create recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
 
     typedef typename boost::make_recursive_variant
         <
