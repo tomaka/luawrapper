@@ -38,6 +38,7 @@ All the files outside of the `include` directory are only for testing purposes a
 * you now need some headers-only library from boost
 * breaking change: `LuaContext` is no longer in the the `Lua` namespace
 * breaking change: you can't pass directly lambdas to `writeVariable` anymore, use `writeFunction` instead or convert them to `std::function`
+* breaking change: there is no more `clearVariable` function, you have to write `nullptr` instead
 * a lot of features have been added: lua arrays, polymorphic functions, etc.
 * the implementation is really a lot cleaner, and probably faster and with less bugs
 
