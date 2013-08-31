@@ -33,6 +33,14 @@ All the files outside of the `include` directory are only for testing purposes a
 * requires [Boost](http://boost.org) (headers only)
 * inheritance not supported (and won't be supported until some reflection is added to the C++ language)
 
+### I have the old (2010) version of your library, what did change?
+* you need an up-to-date compiler now
+* you now need some headers-only library from boost
+* breaking change: `LuaContext` is no longer in the the `Lua` namespace
+* breaking change: you can't pass lambdas to `writeVariable` anymore, use `writeFunction` instead
+* a lot of features have been added: lua arrays, polymorphic functions, etc.
+* the implementation is really a lot cleaner, and probably faster and with less bugs
+
 ### Examples
 All the examples are in C++, except of course the parameter passed to "executeCode".
 
