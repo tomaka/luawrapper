@@ -1611,10 +1611,15 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 	static auto read(const LuaContext& context, int index)
 		-> Vector
 	{
+		return readSafe(context, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<Vector>
+	{
 		Vector result;
 
 		// we traverse the table at the top of the stack
-		// TODO: handle exceptions
 		lua_pushnil(context.mState);		// first key
 		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
@@ -1632,27 +1637,39 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 
 			} catch(...) {
 				lua_pop(context.mState, 2);		// we remove the value and the key
-				throw;
+				return {};
 			}
 		}
 
-		return std::move(result);
-	}
-
-	static auto testRead(const LuaContext& context, int index)
-		-> boost::optional<Vector>
-	{
-		if (!test(context, index))
-			return {};
-		return read(context, index);
+		return { std::move(result) };
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> Vector
 	{
-		if (!test(context, index))
+		if (!lua_istable(context.mState, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Vector)};
-		return read(context, index);
+
+		Vector result;
+
+		// we traverse the table at the top of the stack
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto val1 = Type1Reader::readSafe(context, -2);
+				auto val2 = Type2Reader::readSafe(context, -1);
+				
+				result.push_back({ std::move(val1), std::move(val2) });
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(context.mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
 	}
 };
 
@@ -1709,10 +1726,29 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 	static auto readSafe(const LuaContext& context, int index)
 		-> std::map<TKey,TValue>
 	{
-		auto val = testRead(context, index);
-		if (!val.is_initialized())
+		if (!lua_istable(context.mState, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::map<TKey,TValue>)};
-		return val.get();
+
+		std::map<TKey,TValue> result;
+
+		// we traverse the table at the top of the stack
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto key = KeyReader::readSafe(context, -2);
+				auto value = ValueReader::readSafe(context, -1);
+				
+				result.insert({ std::move(key), std::move(value) });
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(context.mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
 	}
 };
 
@@ -1769,10 +1805,29 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 	static auto readSafe(const LuaContext& context, int index)
 		-> std::unordered_map<TKey,TValue>
 	{
-		auto val = testRead(context, index);
-		if (!val.is_initialized())
+		std::unordered_map<TKey,TValue> result;
+
+		if (!lua_istable(context.mState, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::unordered_map<TKey,TValue>)};
-		return val.get();
+
+		// we traverse the table at the top of the stack
+		lua_pushnil(context.mState);		// first key
+		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
+			// now a key and its value are pushed on the stack
+			try {
+				auto key = KeyReader::readSafe(context, -2);
+				auto value = ValueReader::readSafe(context, -1);
+				
+				result.insert({ std::move(key.get()), std::move(value.get()) });
+				lua_pop(context.mState, 1);		// we remove the value but keep the key for the next iteration
+
+			} catch(...) {
+				lua_pop(context.mState, 2);		// we remove the value and the key
+				throw;
+			}
+		}
+
+		return std::move(result);
 	}
 };
 
