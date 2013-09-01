@@ -15,10 +15,10 @@ TEST(BasicReadWrite, Doubles) {
 	LuaContext context;
 
 	context.writeVariable("a", 5.4);
-	EXPECT_EQ(5.4, context.readVariable<double>("a"));
+	EXPECT_DOUBLE_EQ(5.4, context.readVariable<double>("a"));
 	
 	context.writeVariable("b", -6.72);
-	EXPECT_EQ(-6.72, context.readVariable<double>("b"));
+	EXPECT_DOUBLE_EQ(-6.72, context.readVariable<double>("b"));
 }
 
 TEST(BasicReadWrite, Booleans) {

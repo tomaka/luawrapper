@@ -16,6 +16,6 @@ TEST(AdvancedReadWrite, Test) {
     );
 
 	EXPECT_EQ(true, context.executeCode<bool>("return a.test"));
-	EXPECT_EQ(6.4f, context.executeCode<float>("return a[2]"));
-    EXPECT_EQ(-7.6f, context.readVariable<float>("a", "world"));
+	EXPECT_DOUBLE_EQ(6.4f, context.executeCode<float>("return a[2]"));
+    EXPECT_DOUBLE_EQ(-7.6f, context.readVariable<float>("a", "world"));
 }
