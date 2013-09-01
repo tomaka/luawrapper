@@ -5,19 +5,13 @@ compiler:
 before_install:
   - sudo apt-get install libboost-dev
   - sudo apt-get install liblua5.1-dev
-  - sudo apt-get install libgtest-dev
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo apt-get -qq update
   - 'if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi'
   - 'if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi'
 script:
-  - mkdir gtest-build
-  - cd gtest-build
-  - cmake /usr/src/gtest
-  - make
-  - cd ..
   - mkdir build
   - cd build
-  - cmake -DGTEST_LIBRARY=../gtest-build/libgtest.a -DGTEST_MAIN_LIBRARY=../gtest-build/libgtest_main.a ..
+  - cmake ..
   - make
   - ./tests

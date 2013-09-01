@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 project(luawrapper)
 
+set(CMAKE_GENERATOR_TOOLSET "v120" CACHE STRING "")			# building for VC++ 2013
+
+
 # boost
 find_package(Boost REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
@@ -9,12 +12,25 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package(Lua51 REQUIRED)
 include_directories(${LUA_INCLUDE_DIR})
 
-# gtest
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
-
 # including lua wrapper
 include_directories(include)
+
+# setting up external project
+include(ExternalProject)
+
+# gtest
+ExternalProject_Add(
+    googletest
+    SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk/
+    SVN_REVISION -r 660
+    TIMEOUT 10
+    # Force separate output paths for debug and release builds to allow easy
+    # identification of correct lib in subsequent TARGET_LINK_LIBRARIES commands
+    CMAKE_ARGS -Dgtest_force_shared_crt=ON
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND ""
+)
+include_directories(${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest/include)
 
 # flags
 if (${CMAKE_COMPILER_IS_GNUCXX})
@@ -35,9 +51,11 @@ add_executable(tests
 	tests/custom_types.cpp
 )
 
+add_dependencies(tests googletest)
 target_link_libraries(tests
 	${LUA_LIBRARIES}
-	${GTEST_BOTH_LIBRARIES}
+	${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest-build/${CMAKE_FIND_LIBRARY_PREFIXES}gtest.a
+	${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest-build/${CMAKE_FIND_LIBRARY_PREFIXES}gtest_main.a
 )
 
 # hack
