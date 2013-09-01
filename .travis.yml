@@ -18,6 +18,6 @@ script:
   - cd ..
   - mkdir build
   - cd build
-  - cmake -DGTEST_LIBRARY=../gtest-build/gtest.a -DGTEST_MAIN_LIBRARY=../gtest-build/gtest_main.a ..
+  - cmake -DGTEST_LIBRARY=../gtest-build/libgtest.a -DGTEST_MAIN_LIBRARY=../gtest-build/libgtest_main.a ..
   - make
   - ./tests
