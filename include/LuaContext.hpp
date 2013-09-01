@@ -103,7 +103,11 @@ public:
 	 *
 	 */
 	LuaContext(LuaContext&& s) :
-		mState(s.mState)
+		mState(s.mState),
+		mRegisteredGetters(std::move(s.mRegisteredGetters)),
+		mDefaultGetter(std::move(s.mDefaultGetter)),
+		mRegisteredSetters(std::move(s.mRegisteredSetters)),
+		mDefaultSetter(std::move(s.mDefaultSetter))
 	{
 		s.mState = luaL_newstate();
 		updateRegistryPointer();
@@ -116,6 +120,10 @@ public:
 	LuaContext& operator=(LuaContext&& s)
 	{
 		std::swap(mState, s.mState);
+		std::swap(mRegisteredGetters, s.mRegisteredGetters);
+		std::swap(mDefaultGetter, s.mDefaultGetter);
+		std::swap(mRegisteredSetters, s.mRegisteredSetters);
+		std::swap(mDefaultSetter, s.mDefaultSetter);
 		updateRegistryPointer();
 		s.updateRegistryPointer();
 		return *this;
@@ -1554,10 +1562,16 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 		-> Function
 	{
 		auto beacon = std::make_shared<ValueInRegistry>(context.mState);
+		const auto state = context.mState;
 
-		return [&context,beacon](TParameters&&... params) -> TRetValue {
+		return [state,beacon](TParameters&&... params) -> TRetValue {
+			lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
+			lua_gettable(state, LUA_REGISTRYINDEX);
+			const auto me = static_cast<LuaContext*>(lua_touserdata(state, -1));
+			lua_pop(state, 1);
+
 			beacon->pop();
-			return context.call<TRetValue>(std::forward<TParameters>(params)...);
+			return me->call<TRetValue>(std::forward<TParameters>(params)...);
 		};
 	}
 

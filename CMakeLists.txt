@@ -43,6 +43,7 @@ add_executable(tests
 	tests/functions_write.cpp
 	tests/functions_read.cpp
 	tests/custom_types.cpp
+	tests/movable.cpp
 )
 
 target_link_libraries(tests

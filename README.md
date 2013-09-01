@@ -177,7 +177,7 @@ See the documentation of [`boost::variant`](http://www.boost.org/doc/libs/releas
 
 #### Example 7: handling lua arrays
 
-`writeVariable` and `readVariable` support `std::vector`, `std::map` and `std::unordered_map`.
+`writeVariable` and `readVariable` support `std::vector` of `std::pair`s, `std::map` and `std::unordered_map`.
 This allows you to read and write arrays. Combined with `boost::variant`, this allows you to write real polymorphic arrays.
 
 If you have a `std::vector` which contains `std::pair`s, it will be considered as an associative array, where the first member of the pair is the key and the second member is the value.
