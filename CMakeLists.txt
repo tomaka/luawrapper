@@ -9,6 +9,10 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package(Lua51 REQUIRED)
 include_directories(${LUA_INCLUDE_DIR})
 
+# gtest
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+
 # including lua wrapper
 include_directories(include)
 
@@ -22,11 +26,19 @@ endif()
 
 # executable
 add_executable(tests
-	tests/tests.cpp
+	tests/main.cpp
+	tests/basic_readwrite.cpp
+	tests/advanced_readwrite.cpp
+	tests/execution.cpp
+	tests/functions_write.cpp
+	tests/functions_read.cpp
+	tests/custom_types.cpp
 )
 
 target_link_libraries(tests
 	${LUA_LIBRARIES}
+	${GTEST_BOTH_LIBRARIES}
 )
 
-add_test(test1 tests)
+enable_testing()
+add_test(tests tests)

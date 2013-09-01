@@ -429,8 +429,8 @@ public:
 	 * This only works if the data is either a native function pointer, or contains one operator() (this is the case for lambdas)
 	 */
 	template<typename TFunctionObject>
-	void writeFunction(const std::string& variableName, TFunctionObject functionObject) {
-		writeFunction<typename FunctionTypeDetector<TFunctionObject>::type>(variableName, std::move(functionObject));
+	void writeFunction(const std::string& variableName, TFunctionObject&& functionObject) {
+		writeFunction<typename FunctionTypeDetector<TFunctionObject>::type, TFunctionObject>(variableName, std::forward<TFunctionObject>(functionObject));
 	}
 
 
@@ -487,6 +487,13 @@ private:
 		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(TReturnType)};
 		return std::move(val.get());
+	}
+	
+	template<>
+	auto readTopAndPop<void>(int nb) const
+		-> void
+	{
+		lua_pop(mState, nb);
 	}
 
 	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
@@ -833,24 +840,24 @@ private:
 	struct GenerateSequence { typedef typename IncrementSequence<typename GenerateSequence<N - 1>::type>::type type; };
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple, int... S>
-	auto callWithTupleImpl(const TFunctionObject& function, const TTuple& parameters, Sequence<S...>) const
+	auto callWithTupleImpl(TFunctionObject&& function, const TTuple& parameters, Sequence<S...>) const
 		-> TRetValue
 	{
 		return function(std::get<S>(parameters)...);
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
+	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
-		return std::make_tuple(callWithTupleImpl<TRetValue>(function, parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
+		return std::make_tuple(callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(const TFunctionObject& function, const TTuple& parameters) const
+	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
 		-> typename std::enable_if<std::is_void<TRetValue>::value,std::tuple<>>::type
 	{
-		callWithTupleImpl<TRetValue>(function, parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type());
+		callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type());
 		return std::tuple<>();
 	}
 
@@ -1115,7 +1122,7 @@ private:
 
 	// this structure takes any object and detects its function type
 	template<typename TObjectType>
-	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&TObjectType::operator())>::type type; };
+	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
 };
 
 template<int... S>
