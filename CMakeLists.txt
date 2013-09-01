@@ -19,18 +19,12 @@ include_directories(include)
 include(ExternalProject)
 
 # gtest
-ExternalProject_Add(
-    googletest
-    SVN_REPOSITORY http://googletest.googlecode.com/svn/trunk/
-    SVN_REVISION -r 660
-    TIMEOUT 10
-    # Force separate output paths for debug and release builds to allow easy
-    # identification of correct lib in subsequent TARGET_LINK_LIBRARIES commands
-    CMAKE_ARGS -Dgtest_force_shared_crt=ON
-    UPDATE_COMMAND ""
-    INSTALL_COMMAND ""
-)
-include_directories(${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest/include)
+find_package(Subversion REQUIRED)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty/googletest-src)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty/googletest-bin)
+execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} checkout http://googletest.googlecode.com/svn/trunk/ googletest-src WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty)
+add_subdirectory(${CMAKE_BINARY_DIR}/ThirdParty/googletest-src ThirdParty/googletest-bin)
+include_directories(${CMAKE_BINARY_DIR}/ThirdParty/googletest-src/include)
 
 # flags
 if (${CMAKE_COMPILER_IS_GNUCXX})
@@ -51,11 +45,10 @@ add_executable(tests
 	tests/custom_types.cpp
 )
 
-add_dependencies(tests googletest)
 target_link_libraries(tests
 	${LUA_LIBRARIES}
-	${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest-build/${CMAKE_FIND_LIBRARY_PREFIXES}gtest.a
-	${CMAKE_BINARY_DIR}/googletest-prefix/src/googletest-build/${CMAKE_FIND_LIBRARY_PREFIXES}gtest_main.a
+	gtest
+	gtest_main
 )
 
 # hack
