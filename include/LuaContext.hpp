@@ -1656,7 +1656,7 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 	}
 };
 
-// maps
+// map
 template<typename TKey, typename TValue>
 struct LuaContext::Reader<std::map<TKey,TValue>>
 {
@@ -1673,10 +1673,15 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 	static auto read(const LuaContext& context, int index)
 		-> std::map<TKey,TValue>
 	{
+		return readSafe(context, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::map<TKey,TValue>>
+	{
 		std::map<TKey,TValue> result;
 
 		// we traverse the table at the top of the stack
-		// TODO: handle exceptions
 		lua_pushnil(context.mState);		// first key
 		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
@@ -1694,31 +1699,24 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 
 			} catch(...) {
 				lua_pop(context.mState, 2);		// we remove the value and the key
-				throw;
+				return {};
 			}
 		}
 
-		return std::move(result);
-	}
-
-	static auto testRead(const LuaContext& context, int index)
-		-> boost::optional<std::map<TKey,TValue>>
-	{
-		if (!test(context, index))
-			return {};
-		return read(context, index);
+		return { std::move(result) };
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> std::map<TKey,TValue>
 	{
-		if (!test(context, index))
+		auto val = testRead(context, index);
+		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::map<TKey,TValue>)};
-		return read(context, index);
+		return val.get();
 	}
 };
 
-// unordered_maps
+// unordered_map
 template<typename TKey, typename TValue>
 struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 {
@@ -1735,10 +1733,15 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 	static auto read(const LuaContext& context, int index)
 		-> std::unordered_map<TKey,TValue>
 	{
+		return readSafe(context, index);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<std::unordered_map<TKey,TValue>>
+	{
 		std::unordered_map<TKey,TValue> result;
 
 		// we traverse the table at the top of the stack
-		// TODO: handle exceptions
 		lua_pushnil(context.mState);		// first key
 		while (lua_next(context.mState, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
@@ -1756,27 +1759,20 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 
 			} catch(...) {
 				lua_pop(context.mState, 2);		// we remove the value and the key
-				throw;
+				return {};
 			}
 		}
 
-		return std::move(result);
-	}
-
-	static auto testRead(const LuaContext& context, int index)
-		-> boost::optional<std::unordered_map<TKey,TValue>>
-	{
-		if (!test(context, index))
-			return {};
-		return read(context, index);
+		return { std::move(result) };
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> std::unordered_map<TKey,TValue>
 	{
-		if (!test(context, index))
+		auto val = testRead(context, index);
+		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::unordered_map<TKey,TValue>)};
-		return read(context, index);
+		return val.get();
 	}
 };
 
