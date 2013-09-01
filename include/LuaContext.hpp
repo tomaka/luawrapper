@@ -292,7 +292,7 @@ public:
 	{
 		const auto getter = [=](const TObject& obj) -> TVarType { return obj.*member; };
 		const auto setter = [=](TObject& obj, const TVarType& value) { obj.*member = value; };
-		registerMember<TObject>(name, getter, setter);
+		registerMember<TObject,TVarType>(name, getter, setter);
 	}
 
 	/**
