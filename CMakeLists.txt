@@ -40,5 +40,12 @@ target_link_libraries(tests
 	${GTEST_BOTH_LIBRARIES}
 )
 
+# hack
+if (${UNIX})
+	target_link_libraries(tests
+		pthread
+	)
+endif()
+
 enable_testing()
 add_test(tests tests)

@@ -1119,7 +1119,7 @@ private:
 };
 
 template<>
-auto LuaContext::readTopAndPop<void>(int nb) const
+inline auto LuaContext::readTopAndPop<void>(int nb) const
 	-> void
 {
 	lua_pop(mState, nb);
