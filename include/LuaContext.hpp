@@ -488,13 +488,6 @@ private:
 			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(TReturnType)};
 		return std::move(val.get());
 	}
-	
-	template<>
-	auto readTopAndPop<void>(int nb) const
-		-> void
-	{
-		lua_pop(mState, nb);
-	}
 
 	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
 	// it is available for everything that needs it and its offset is at &typeid(LuaContext)
@@ -1124,6 +1117,13 @@ private:
 	template<typename TObjectType>
 	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
 };
+
+template<>
+auto LuaContext::readTopAndPop<void>(int nb) const
+	-> void
+{
+	lua_pop(mState, nb);
+}
 
 template<int... S>
 struct LuaContext::IncrementSequence<LuaContext::Sequence<S...>> { typedef Sequence<S..., sizeof...(S)> type; };
