@@ -200,7 +200,7 @@ If you have a `std::vector` which contains `std::pair`s, it will be considered a
 
 Prints `true` and `6.4`.
 
-You can also use `readVariable` to directly read inside an array.
+You can also use `readVariable` and `writeVariable` to directly read or write inside an array.
     
     std::cout << lua.readVariable("a", "test") << std::endl;
     std::cout << lua.readVariable("a", 2) << std::endl;

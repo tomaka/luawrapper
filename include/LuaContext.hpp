@@ -415,6 +415,25 @@ public:
 		if (pushedElems >= 2)
 			lua_pop(mState, pushedElems - 1);
 	}
+	
+	/**
+	 * Version of writeVariable which supports writing directly inside arrays
+	 * @sa writeVariable
+	 */
+	template<typename... TData>
+	void writeVariable(const std::string& variableName, TData&&... data) {
+		// we need two steps, otherwise we have a template substition failure
+		lua_getglobal(mState, variableName.c_str());
+		try {
+			if (!lua_istable(mState, -1))
+				throw std::logic_error("Trying to access indices of a non-table");
+			writeVariableImpl(std::forward<TData>(data)...);
+		} catch(...) {
+			lua_pop(mState, 1);
+			throw;
+		}
+		lua_pop(mState, 1);
+	}
 
 	/**
 	 * Same as writeVariable but you don't need to convert the parameter to a std::function
@@ -504,6 +523,22 @@ private:
 		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(LuaContext)));
 		lua_pushlightuserdata(mState, this);
 		lua_settable(mState, LUA_REGISTRYINDEX);
+	}
+
+	// implementation of writeVariable with arrays
+	template<typename TElem1, typename TElem2, typename TElem3, typename... TElements>
+	void writeVariableImpl(TElem1&& elem1, TElem2&& elem2, TElem3&& elem3, TElements&&... elements) {
+		lookIntoStackTop(std::forward<TElem1>(elem1));
+		if (!lua_istable(mState, -1))
+			throw std::logic_error("Trying to access indices of a non-table");
+		writeVariableImpl(std::forward<TElem2>(elem2), std::forward<TElem3>(elem3), std::forward<TElements>(elements)...);
+	}
+	
+	template<typename TLastElement, typename TData>
+	void writeVariableImpl(TLastElement&& lastElem, TData&& data) {
+		Pusher<typename std::decay<TLastElement>::type>::push(*this, std::forward<TLastElement>(lastElem));
+		Pusher<typename std::decay<TData>::type>::push(*this, std::forward<TData>(data));
+		lua_settable(mState, -3);
 	}
 	
 

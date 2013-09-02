@@ -41,6 +41,24 @@ TEST(AdvancedReadWrite, EmptyArray) {
 	EXPECT_EQ(0, context.executeCode<int>("return table.getn(a)"));
 }
 
+TEST(AdvancedReadWrite, ReadInsideArrays) {
+	LuaContext context;
+
+	context.executeCode("a = { 12, 34 }");
+	EXPECT_EQ(12, context.readVariable<int>("a", 1));
+	EXPECT_EQ(34, context.readVariable<int>("a", 2));
+}
+
+TEST(AdvancedReadWrite, WriteInsideArrays) {
+	LuaContext context;
+
+	context.executeCode("a = { 1, {} }");
+	context.writeVariable("a", 1, 34);
+	context.writeVariable("a", 2, "test", 14);
+	EXPECT_EQ(34, context.readVariable<int>("a", 1));
+	EXPECT_EQ(14, context.readVariable<int>("a", 2, "test"));
+}
+
 TEST(AdvancedReadWrite, WritingVectors) {
 	LuaContext context;
 	
