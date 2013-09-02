@@ -190,7 +190,7 @@ public:
 		std::string luaType;
 		const std::type_info& destination;
 	};
-	
+
 	/**
 	 * Executes lua code from the stream
 	 * @param code A stream that lua will read its code from
@@ -1126,6 +1126,9 @@ private:
 	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
 };
 
+static struct LuaEmptyArray_t {}
+	LuaEmptyArray {};
+
 template<>
 inline auto LuaContext::readTopAndPop<void>(int nb) const
 	-> void
@@ -1220,6 +1223,15 @@ struct LuaContext::Pusher<std::nullptr_t> {
 	static int push(const LuaContext& context, std::nullptr_t value) {
 		assert(value == nullptr);
 		lua_pushnil(context.mState);
+		return 1;
+	}
+};
+
+// empty arrays
+template<>
+struct LuaContext::Pusher<LuaEmptyArray_t> {
+	static int push(const LuaContext& context, LuaEmptyArray_t) {
+		lua_newtable(context.mState);
 		return 1;
 	}
 };

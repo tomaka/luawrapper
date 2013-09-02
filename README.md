@@ -223,6 +223,11 @@ Remember that you can create recursive variants, so you can read arrays which co
 
 This `AnyValue` can store any lua value, except functions and custom objects.
 
+You can also write an empty array, like this:
+
+    LuaContext lua;
+    lua.writeVariable("a", LuaEmptyArray);
+
 #### Example 8: returning multiple values
 
     LuaContext lua;

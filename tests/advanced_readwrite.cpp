@@ -34,6 +34,13 @@ TEST(AdvancedReadWrite, ReadingOptional) {
 	EXPECT_EQ(boost::optional<int>{}, context.readVariable<boost::optional<int>>("b"));
 }
 
+TEST(AdvancedReadWrite, EmptyArray) {
+	LuaContext context;
+
+	context.writeVariable("a", LuaEmptyArray);
+	EXPECT_EQ(0, context.executeCode<int>("return table.getn(a)"));
+}
+
 TEST(AdvancedReadWrite, WritingVectors) {
 	LuaContext context;
 	
