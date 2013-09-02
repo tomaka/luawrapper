@@ -38,7 +38,7 @@ All the files outside of the `include` directory are only for testing purposes a
 * you now need some headers-only library from boost
 * breaking change: `LuaContext` is no longer in the the `Lua` namespace
 * breaking change: you can't pass directly lambdas to `writeVariable` anymore, use `writeFunction` instead or convert them to `std::function`
-* breaking change: there is no more `clearVariable` function, you have to write `nullptr` instead
+* breaking change: the functions `clearVariable`, `doesVariableExist`, `writeEmptyArray` and `callLuaFunction` no longer exist, but you can reproduce their effect with `writeVariable` and `readVariable`
 * a lot of features have been added: lua arrays, polymorphic functions, etc.
 * the implementation is really a lot cleaner, and probably faster and with less bugs
 
@@ -204,6 +204,11 @@ You can also use `readVariable` and `writeVariable` to directly read or write in
     
     std::cout << lua.readVariable("a", "test") << std::endl;
     std::cout << lua.readVariable("a", 2) << std::endl;
+    
+You can also write an empty array, like this:
+
+    LuaContext lua;
+    lua.writeVariable("a", LuaEmptyArray);
 
 Remember that you can create recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
 
@@ -222,11 +227,6 @@ Remember that you can create recursive variants, so you can read arrays which co
     lua.readVariable<AnyValue>("something");
 
 This `AnyValue` can store any lua value, except functions and custom objects.
-
-You can also write an empty array, like this:
-
-    LuaContext lua;
-    lua.writeVariable("a", LuaEmptyArray);
 
 #### Example 8: returning multiple values
 
