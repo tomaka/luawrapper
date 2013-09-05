@@ -9,7 +9,11 @@ find_package(Boost REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 # lua
-find_package(Lua51 REQUIRED)
+find_package(Lua51)
+find_package(Lua52)
+if (NOT ${LUA51_FOUND} AND NOT ${LUA52_FOUND})
+	message(FATAL_ERROR "Could not find lua library")
+endif()
 include_directories(${LUA_INCLUDE_DIR})
 
 # including lua wrapper
