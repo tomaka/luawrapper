@@ -4,7 +4,7 @@ compiler:
   - clang
 before_install:
   - sudo apt-get install libboost-dev
-  - sudo apt-get install liblua5.1-dev
+  - sudo apt-get install $LUA
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo apt-get -qq update
   - 'if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi'
@@ -15,3 +15,6 @@ script:
   - cmake ..
   - make
   - ./tests
+env:
+  - LUA="liblua5.1-dev"
+  - LUA="liblua5.2-dev"
