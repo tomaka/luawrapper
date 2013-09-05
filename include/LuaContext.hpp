@@ -410,7 +410,7 @@ public:
 		static_assert(!std::is_same<typename Tupleizer<RealDataType>::type,RealDataType>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
 
 #		if LUA_VERSION_NUM >= 502
-			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			lua_pushglobaltable(mState);
 			try {
 				setTable<-1>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
 			} catch(...) {
@@ -432,7 +432,7 @@ public:
 			RealDataType;
 		
 #		if LUA_VERSION_NUM >= 502
-			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			lua_pushglobaltable(mState);
 			try {
 				setTable<-1>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
 			} catch(...) {
@@ -457,7 +457,7 @@ public:
 			DetectedFunctionType;
 		
 #		if LUA_VERSION_NUM >= 502
-			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			lua_pushglobaltable(mState);
 			try {
 				setTable<-1>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
 			} catch(...) {
