@@ -402,103 +402,40 @@ public:
 	 *
 	 * All objects are passed by copy and destroyed by the garbage collector if necessary.
 	 */
-	template<typename T>
-	void writeVariable(const std::string& variableName, T&& data) {
-		static_assert(!std::is_same<typename Tupleizer<T>::type,T>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
-		const int pushedElems = Pusher<typename std::decay<T>::type>::push(*this, std::forward<T>(data));
-		try {
-			lua_setglobal(mState, variableName.c_str());
-		} catch(...) {
-			lua_pop(mState, pushedElems);
-			throw;
-		}
-		if (pushedElems >= 2)
-			lua_pop(mState, pushedElems - 1);
+	template<typename... TData>
+	void writeVariable(TData&&... data) {
+		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeVariable");
+		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+			RealDataType;
+		static_assert(!std::is_same<typename Tupleizer<RealDataType>::type,RealDataType>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
+		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
 	}
 	
 	/**
-	 * Version of writeVariable which supports writing directly inside arrays
-	 * @sa writeVariable
-	 */
-	template<typename... TData>
-	void writeVariable(const std::string& variableName, TData&&... data) {
-		// we need two steps, otherwise we have a template substition failure
-		lua_getglobal(mState, variableName.c_str());
-		try {
-			if (!lua_istable(mState, -1))
-				throw std::logic_error("Trying to access indices of a non-table");
-			writeVariableImpl(std::forward<TData>(data)...);
-		} catch(...) {
-			lua_pop(mState, 1);
-			throw;
-		}
-		lua_pop(mState, 1);
-	}
-
-	/**
 	 * Same as writeVariable but you don't need to convert the parameter to a std::function
 	 */
-	template<typename FunctionType, typename FunctionObject>
-	void writeFunction(const std::string& variableName, FunctionObject functionObject) {
-		const int pushedElems = pushFunction<FunctionType>(std::move(functionObject));
-		try {
-			lua_setglobal(mState, variableName.c_str());
-		} catch(...) {
-			lua_pop(mState, pushedElems);
-			throw;
-		}
-		if (pushedElems >= 2)
-			lua_pop(mState, pushedElems - 1);
-	}
-
-	/**
-	 * Version of writeFunction which supports writing directly inside arrays
-	 * @sa writeFunction
-	 */
 	template<typename TFunctionType, typename... TData>
-	void writeFunction(const std::string& variableName, TData&&... data) {
-		// we need two steps, otherwise we have a template substition failure
-		lua_getglobal(mState, variableName.c_str());
-		try {
-			if (!lua_istable(mState, -1))
-				throw std::logic_error("Trying to access indices of a non-table");
-			writeFunctionImpl<TFunctionType>(std::forward<TData>(data)...);
-		} catch(...) {
-			lua_pop(mState, 1);
-			throw;
-		}
-		lua_pop(mState, 1);
+	void writeFunction(TData&&... data) {
+		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
+		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+			RealDataType;
+		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
 	}
 
 	/**
 	 * Does the same as writeVariable, except that the function type is automatically detected
 	 * This only works if the data is either a native function pointer, or contains one operator() (this is the case for lambdas)
 	 */
-	template<typename TFunctionObject>
-	void writeFunction(const std::string& variableName, TFunctionObject&& functionObject) {
-		writeFunction<typename FunctionTypeDetector<TFunctionObject>::type, TFunctionObject>(variableName, std::forward<TFunctionObject>(functionObject));
-	}
-
-	/**
-	 * Version of writeFunction which supports writing directly inside arrays
-	 * @sa writeFunction
-	 */
 	template<typename... TData>
-	void writeFunction(const std::string& variableName, TData&&... data) {
-		// we need two steps, otherwise we have a template substition failure
-		lua_getglobal(mState, variableName.c_str());
-		try {
-			if (!lua_istable(mState, -1))
-				throw std::logic_error("Trying to access indices of a non-table");
-			writeFunctionImpl(std::forward<TData>(data)...);
-		} catch(...) {
-			lua_pop(mState, 1);
-			throw;
-		}
-		lua_pop(mState, 1);
+	void writeFunction(TData&&... data) {
+		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
+		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+			RealDataType;
+		typedef typename FunctionTypeDetector<RealDataType>::type
+			DetectedFunctionType;
+		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
 	}
-
-
+	
 
 private:
 	// forbidding copy
@@ -539,6 +476,32 @@ private:
 	void lookIntoStackTop() const {
 	}
 
+	// equivalent of lua_settable with t[k]=n, where t is the value at the index in the template parameter, k is the second parameter, n is the last parameter, and n is pushed by the function in the first parameter
+	// if there are more than 3 parameters, parameters 3 to n-1 are considered as sub-indices into the array
+	// TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
+	template<int TTableIndex, typename TDataPusher, typename TIndex, typename TData>
+	void setTable(const TDataPusher& dataPusher, TIndex&& index, TData&& data) {
+		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
+		try { dataPusher(data); } catch(...) { lua_pop(mState, 1); }
+		lua_settable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 2);
+	}
+	template<int TTableIndex, typename TDataPusher, typename TData>
+	void setTable(const TDataPusher& dataPusher, const std::string& index, TData&& data) {
+		dataPusher(data);
+		lua_setfield(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1, index.c_str());
+	}
+	template<int TTableIndex, typename TDataPusher, typename TData>
+	void setTable(const TDataPusher& dataPusher, const char* index, TData&& data) {
+		dataPusher(data);
+		lua_setfield(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1, index);
+	}
+	template<int TTableIndex, typename TDataPusher, typename TIndex1, typename TIndex2, typename... TIndices>
+	void setTable(const TDataPusher& dataPusher, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
+		Pusher<typename std::decay<TIndex1>::type>::push(*this, std::forward<TIndex1>(index1));
+		lua_gettable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1);
+		setTable<-1>(dataPusher, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+		lua_pop(mState, 1);
+	}
 
 	// simple function that reads the "nb" first top elements of the stack, pops them, and returns the value
 	// warning: first parameter is the number of parameters, not the parameter index
@@ -562,55 +525,7 @@ private:
 		lua_pushlightuserdata(mState, this);
 		lua_settable(mState, LUA_REGISTRYINDEX);
 	}
-
-	// implementation of writeVariable with arrays
-	template<typename TElem1, typename TElem2, typename TElem3, typename... TElements>
-	void writeVariableImpl(TElem1&& elem1, TElem2&& elem2, TElem3&& elem3, TElements&&... elements) {
-		lookIntoStackTop(std::forward<TElem1>(elem1));
-		if (!lua_istable(mState, -1))
-			throw std::logic_error("Trying to access indices of a non-table");
-		writeVariableImpl(std::forward<TElem2>(elem2), std::forward<TElem3>(elem3), std::forward<TElements>(elements)...);
-	}
-	
-	template<typename TLastElement, typename TData>
-	void writeVariableImpl(TLastElement&& lastElem, TData&& data) {
-		Pusher<typename std::decay<TLastElement>::type>::push(*this, std::forward<TLastElement>(lastElem));
-		Pusher<typename std::decay<TData>::type>::push(*this, std::forward<TData>(data));
-		lua_settable(mState, -3);
-	}
-
-	// implementation of writeFunction with arrays
-	template<typename TFunctionType, typename TElem1, typename TElem2, typename TElem3, typename... TElements>
-	void writeFunctionImpl(TElem1&& elem1, TElem2&& elem2, TElem3&& elem3, TElements&&... elements) {
-		lookIntoStackTop(std::forward<TElem1>(elem1));
-		if (!lua_istable(mState, -1))
-			throw std::logic_error("Trying to access indices of a non-table");
-		writeFunctionImpl<TFunctionType>(std::forward<TElem2>(elem2), std::forward<TElem3>(elem3), std::forward<TElements>(elements)...);
-	}
-	
-	template<typename TFunctionType, typename TLastElement, typename TData>
-	void writeFunctionImpl(TLastElement&& lastElem, TData&& data) {
-		Pusher<typename std::decay<TLastElement>::type>::push(*this, std::forward<TLastElement>(lastElem));
-		pushFunction<TFunctionType>(std::forward<TData>(data));
-		lua_settable(mState, -3);
-	}
-	
-	// implementation of writeFunction with arrays
-	template<typename TElem1, typename TElem2, typename TElem3, typename... TElements>
-	void writeFunctionImpl(TElem1&& elem1, TElem2&& elem2, TElem3&& elem3, TElements&&... elements) {
-		lookIntoStackTop(std::forward<TElem1>(elem1));
-		if (!lua_istable(mState, -1))
-			throw std::logic_error("Trying to access indices of a non-table");
-		writeFunctionImpl(std::forward<TElem2>(elem2), std::forward<TElem3>(elem3), std::forward<TElements>(elements)...);
-	}
-	
-	template<typename TLastElement, typename TData>
-	void writeFunctionImpl(TLastElement&& lastElem, TData&& data) {
-		Pusher<typename std::decay<TLastElement>::type>::push(*this, std::forward<TLastElement>(lastElem));
-		pushFunction<typename FunctionTypeDetector<typename std::decay<TData>::type>::type>(std::forward<TData>(data));
-		lua_settable(mState, -3);
-	}
-	
+		
 
 	/**************************************************/
 	/*            FUNCTIONS REGISTRATION              */
