@@ -38,7 +38,7 @@ TEST(AdvancedReadWrite, EmptyArray) {
 	LuaContext context;
 
 	context.writeVariable("a", LuaEmptyArray);
-	EXPECT_EQ(0, context.executeCode<int>("return table.getn(a)"));
+	EXPECT_EQ("table", context.executeCode<std::string>("return type(a)"));
 }
 
 TEST(AdvancedReadWrite, ReadInsideArrays) {
