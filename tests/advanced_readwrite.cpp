@@ -65,8 +65,8 @@ TEST(AdvancedReadWrite, WriteFunctionInsideArrays) {
 	context.executeCode("a = { 1, {} }");
 	context.writeFunction<int (int)>("a", 1, [](int x) { return x + 1; });
 	context.writeFunction("a", 2, "test", [](int x) { return x * 2; });
-	EXPECT_EQ(34, context.executeCode<int>("var f = a[1]; return f(33)"));
-	EXPECT_EQ(14, context.executeCode<int>("var f = a[2].test; return f(7)"));
+	EXPECT_EQ(34, context.executeCode<int>("local f = a[1]; return f(33)"));
+	EXPECT_EQ(14, context.executeCode<int>("local f = a[2].test; return f(7)"));
 }
 
 TEST(AdvancedReadWrite, WritingVectors) {
