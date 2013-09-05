@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project(luawrapper)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 set(CMAKE_GENERATOR_TOOLSET "v120" CACHE STRING "")			# building for VC++ 2013
 
 
