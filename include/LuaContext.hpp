@@ -408,7 +408,18 @@ public:
 		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
 			RealDataType;
 		static_assert(!std::is_same<typename Tupleizer<RealDataType>::type,RealDataType>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
-		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
+
+#		if LUA_VERSION_NUM >= 502
+			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			try {
+				setTable<-1>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
+			} catch(...) {
+				lua_pop(mState, 1);
+			}
+			lua_pop(mState, 1);
+#		else
+			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
+#		endif
 	}
 	
 	/**
@@ -419,7 +430,18 @@ public:
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
 		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
 			RealDataType;
-		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+		
+#		if LUA_VERSION_NUM >= 502
+			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			try {
+				setTable<-1>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+			} catch(...) {
+				lua_pop(mState, 1);
+			}
+			lua_pop(mState, 1);
+#		else
+			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+#		endif
 	}
 
 	/**
@@ -433,7 +455,18 @@ public:
 			RealDataType;
 		typedef typename FunctionTypeDetector<RealDataType>::type
 			DetectedFunctionType;
-		setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+		
+#		if LUA_VERSION_NUM >= 502
+			lua_rawgeti(mState, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+			try {
+				setTable<-1>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+			} catch(...) {
+				lua_pop(mState, 1);
+			}
+			lua_pop(mState, 1);
+#		else
+			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+#		endif
 	}
 	
 
