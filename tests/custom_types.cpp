@@ -26,6 +26,28 @@ TEST(CustomTypes, MemberFunctions) {
 	EXPECT_EQ(11, context.readVariable<Object>("obj").value);
 }
 
+TEST(CustomTypes, ConstVolatileMemberFunctions) {
+	struct Object {
+		int foo() { return 1; }
+		int fooC() const { return 2; }
+		int fooV() volatile { return 3; }
+		int fooCV() const volatile { return 4; }
+    };
+    
+    LuaContext context;
+    context.registerFunction("foo", &Object::foo);
+    context.registerFunction("fooC", &Object::fooC);
+    context.registerFunction("fooV", &Object::fooV);
+    context.registerFunction("fooCV", &Object::fooCV);
+    
+    context.writeVariable("obj", Object{});
+
+    EXPECT_EQ(1, context.executeCode<int>("return obj:foo()"));
+    EXPECT_EQ(2, context.executeCode<int>("return obj:fooC()"));
+    EXPECT_EQ(3, context.executeCode<int>("return obj:fooV()"));
+    EXPECT_EQ(4, context.executeCode<int>("return obj:fooCV()"));
+}
+
 TEST(CustomTypes, Members) {
 	struct Object {
 		int value;

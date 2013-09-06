@@ -266,6 +266,21 @@ public:
 	{
 		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
 	}
+	template<typename TType, typename TRetValue, typename... TArgs>
+	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const)
+	{
+		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](const TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+	}
+	template<typename TType, typename TRetValue, typename... TArgs>
+	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) volatile)
+	{
+		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](volatile TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+	}
+	template<typename TType, typename TRetValue, typename... TArgs>
+	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const volatile)
+	{
+		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](const volatile TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+	}
 
 	/**
 	 * Adds a custom function to a type
