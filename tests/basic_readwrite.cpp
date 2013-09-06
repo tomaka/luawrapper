@@ -25,10 +25,10 @@ TEST(BasicReadWrite, Booleans) {
 	LuaContext context;
 
 	context.writeVariable("a", true);
-	EXPECT_EQ(true, context.readVariable<bool>("a"));
+	EXPECT_TRUE(context.readVariable<bool>("a"));
 	
 	context.writeVariable("b", false);
-	EXPECT_EQ(false, context.readVariable<bool>("b"));
+	EXPECT_FALSE(context.readVariable<bool>("b"));
 }
 
 TEST(BasicReadWrite, Strings) {
