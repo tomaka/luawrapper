@@ -132,6 +132,17 @@ TEST(AdvancedReadWrite, UnorderedMaps) {
 	EXPECT_EQ("world", val.at(-23));
 }
 
+TEST(AdvancedReadWrite, WritingOptionals) {
+	LuaContext context;
+
+	context.writeVariable("a", boost::optional<int>{});
+	context.writeVariable("b", boost::optional<int>{12});
+
+	EXPECT_EQ("nil", context.executeCode<std::string>("return type(a)"));
+	EXPECT_EQ("number", context.executeCode<std::string>("return type(b)"));
+	EXPECT_EQ(12, context.executeCode<int>("return b"));
+}
+
 TEST(AdvancedReadWrite, AdvancedExample) {
 	LuaContext context;
 

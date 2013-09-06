@@ -1533,6 +1533,25 @@ private:
 	};
 };
 
+// boost::optional
+template<typename TType>
+struct LuaContext::Pusher<boost::optional<TType>> {
+	typedef Pusher<typename std::decay<TType>::type>
+		UnderlyingPusher;
+
+	static const int minSize = UnderlyingPusher::minSize < 1 ? UnderlyingPusher::minSize : 1;
+	static const int maxSize = UnderlyingPusher::maxSize > 1 ? UnderlyingPusher::maxSize : 1;
+
+	static int push(const LuaContext& context, const boost::optional<TType>& value) {
+		if (value) {
+			return UnderlyingPusher::push(context, value.get());
+		} else {
+			lua_pushnil(context.mState);
+			return 1;
+		}
+	}
+};
+
 // tuple
 template<typename... TTypes>
 struct LuaContext::Pusher<std::tuple<TTypes...>> {
