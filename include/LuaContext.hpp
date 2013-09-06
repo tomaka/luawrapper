@@ -498,7 +498,7 @@ private:
 	// it will look into the top element of the stack and replace the element by its content at the given index
 	template<typename OffsetType1, typename... OffsetTypeOthers>
 	void lookIntoStackTop(OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) const {
-		static_assert(Pusher<typename std::decay<OffsetType1>::type>::size == 1, "Impossible to have a multiple-values index");
+		static_assert(Pusher<typename std::decay<OffsetType1>::type>::minSize == 1 && Pusher<typename std::decay<OffsetType1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<OffsetType1>::type>::push(*this, offset1);
 		lua_gettable(mState, -2);
 		lua_remove(mState, -2);
@@ -514,7 +514,7 @@ private:
 	// TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
 	template<int TTableIndex, typename TDataPusher, typename TIndex, typename TData>
 	void setTable(const TDataPusher& dataPusher, TIndex&& index, TData&& data) {
-		static_assert(Pusher<typename std::decay<TIndex>::type>::size == 1, "Impossible to have a multiple-values index");
+		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
 		try { dataPusher(data); } catch(...) { lua_pop(mState, 1); }
 		lua_settable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 2);
@@ -531,7 +531,7 @@ private:
 	}
 	template<int TTableIndex, typename TDataPusher, typename TIndex1, typename TIndex2, typename... TIndices>
 	void setTable(const TDataPusher& dataPusher, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
-		static_assert(Pusher<typename std::decay<TIndex1>::type>::size == 1, "Impossible to have a multiple-values index");
+		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex1>::type>::push(*this, std::forward<TIndex1>(index1));
 		lua_gettable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1);
 		try {
@@ -600,8 +600,7 @@ private:
 
 		if (readFunction) {
 			mRegisteredGetters[&typeid(TObject)][name] = [=](const void* object, LuaContext& ctxt) -> int {
-				Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
-				return Pusher<typename std::decay<TVarType>::type>::size;
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
 			};
 		}
 
@@ -618,8 +617,7 @@ private:
 	{
 		if (readFunction) {
 			mDefaultGetter[&typeid(TObject)] = [=](const void* object, const std::string& name, LuaContext& ctxt) -> int {
-				Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
-				return Pusher<typename std::decay<TVarType>::type>::size;
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
 			};
 		}
 
@@ -705,10 +703,10 @@ private:
 		typedef typename Tupleizer<TReturnType>::type
 			RealReturnType;
 		const int outArguments = std::tuple_size<RealReturnType>::value;
-		const int inArguments = Pusher<std::tuple<TParameters...>>::size;
+		int inArguments;
 		try {
 			// we push the parameters on the stack
-			Pusher<std::tuple<TParameters...>>::push(*this, std::make_tuple(std::forward<TParameters>(input)...));
+			inArguments = Pusher<std::tuple<TParameters...>>::push(*this, std::make_tuple(std::forward<TParameters>(input)...));
 		} catch(...) {
 			lua_pop(mState, 1);
 			throw;
@@ -758,10 +756,11 @@ private:
 	// any object
 	template<typename TType, typename = void>
 	struct Pusher {
-		static const int size = 1;
+		static const int minSize = 1;
+		static const int maxSize = 1;
 
 		template<typename TType2>
-		static void push(const LuaContext& context, TType2&& value) {
+		static int push(const LuaContext& context, TType2&& value) {
 			// this function is called when lua's garbage collector wants to destroy our object
 			// we simply call its destructor
 			const auto garbageCallbackFunction = [](lua_State* lua) -> int {
@@ -884,16 +883,24 @@ private:
 					// our custom type remains on the stack (and that's what we want since this is a push function)
 					lua_setmetatable(context.mState, -2);
 
-				}
-				catch (...) { lua_pop(context.mState, 1); throw; }
-			}
-			catch (...) { lua_pop(context.mState, 1); throw; }
+				} catch (...) { lua_pop(context.mState, 1); throw; }
+			} catch (...) { lua_pop(context.mState, 1); throw; }
+
+			return 1;
 		}
 	};
-
-	// this structure has a "size" int member which is equal to the total size of the push of all the types
+	
+	// this structure has a "size" int member which is equal to the total of the push min size of all the types
 	template<typename... TTypes>
-	struct PusherTotalSize;
+	struct PusherTotalMinSize;
+
+	// this structure has a "size" int member which is equal to the total of the push max size of all the types
+	template<typename... TTypes>
+	struct PusherTotalMaxSize;
+	
+	// this structure has a "size" int member which is equal to the maximum size of the push of all the types
+	template<typename... TTypes>
+	struct PusherMinSize;
 	
 	// this structure has a "size" int member which is equal to the maximum size of the push of all the types
 	template<typename... TTypes>
@@ -976,8 +983,7 @@ private:
 				auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(fn, parameters);
 
 				// pushing the result on the stack and returning number of pushed elements
-				Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
-				return Pusher<typename std::decay<decltype(result)>::type>::size;
+				return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
 			}
 
 			LuaContext const* me;
@@ -1072,8 +1078,7 @@ private:
 			auto result = me->callWithTuple<typename FunctionArguments::ReturnValue>(*toCall, parameters);
 
 			// pushing the result on the stack and returning number of pushed elements
-			Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
-			return Pusher<typename std::decay<decltype(result)>::type>::size;
+			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
 		};
 
 		// we copy the function object onto the stack
@@ -1239,15 +1244,27 @@ struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters.
 template<typename TType, typename TRetValue, typename... TParameters>
 struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const volatile>		{ typedef TRetValue type(TParameters...); };
 
-// implementation of PusherTotalSize
+// implementation of PusherTotalMinSize
 template<typename TFirst, typename... TTypes>
-struct LuaContext::PusherTotalSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::size + PusherTotalSize<TTypes...>::size; };
+struct LuaContext::PusherTotalMinSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::minSize + PusherTotalMinSize<TTypes...>::size; };
 template<>
-struct LuaContext::PusherTotalSize<> { static const int size = 0; };
+struct LuaContext::PusherTotalMinSize<> { static const int size = 0; };
+
+// implementation of PusherTotalMaxSize
+template<typename TFirst, typename... TTypes>
+struct LuaContext::PusherTotalMaxSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::maxSize + PusherTotalMaxSize<TTypes...>::size; };
+template<>
+struct LuaContext::PusherTotalMaxSize<> { static const int size = 0; };
+
+// implementation of PusherMinSize
+template<typename TFirst, typename... TTypes>
+struct LuaContext::PusherMinSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::minSize < PusherTotalMaxSize<TTypes...>::size ? Pusher<typename std::decay<TFirst>::type>::minSize : PusherMinSize<TTypes...>::size; };
+template<>
+struct LuaContext::PusherMinSize<> { static const int size = 0; };
 
 // implementation of PusherMaxSize
 template<typename TFirst, typename... TTypes>
-struct LuaContext::PusherMaxSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::size > PusherTotalSize<TTypes...>::size ? Pusher<typename std::decay<TFirst>::type>::size : PusherMaxSize<TTypes...>::size; };
+struct LuaContext::PusherMaxSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::maxSize > PusherTotalMaxSize<TTypes...>::size ? Pusher<typename std::decay<TFirst>::type>::maxSize : PusherMaxSize<TTypes...>::size; };
 template<>
 struct LuaContext::PusherMaxSize<> { static const int size = 0; };
 
@@ -1259,74 +1276,108 @@ struct LuaContext::PusherMaxSize<> { static const int size = 0; };
 // boolean
 template<>
 struct LuaContext::Pusher<bool> {
-	static const int size = 1;
-	static void push(const LuaContext& context, bool value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, bool value) {
 		lua_pushboolean(context.mState, value);
+		return 1;
 	}
 };
 
 // string
 template<>
 struct LuaContext::Pusher<std::string> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::string& value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::string& value) {
 		lua_pushstring(context.mState, value.c_str());
+		return 1;
 	}
 };
 
 // const char*
 template<>
 struct LuaContext::Pusher<const char*> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const char* value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const char* value) {
 		lua_pushstring(context.mState, value);
+		return 1;
+	}
+};
+
+// const char[N]
+template<int N>
+struct LuaContext::Pusher<const char[N]> {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const char* value) {
+		lua_pushstring(context.mState, value);
+		return 1;
 	}
 };
 
 // floating numbers
 template<typename T>
 struct LuaContext::Pusher<T, typename std::enable_if<std::is_floating_point<T>::value>::type> {
-	static const int size = 1;
-	static void push(const LuaContext& context, T value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, T value) {
 		lua_pushnumber(context.mState, value);
+		return 1;
 	}
 };
 
 // integers
 template<typename T>
 struct LuaContext::Pusher<T, typename std::enable_if<std::is_integral<T>::value>::type> {
-	static const int size = 1;
-	static void push(const LuaContext& context, T value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, T value) {
 		lua_pushinteger(context.mState, value);
+		return 1;
 	}
 };
 
 // nil
 template<>
 struct LuaContext::Pusher<std::nullptr_t> {
-	static const int size = 1;
-	static void push(const LuaContext& context, std::nullptr_t value) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, std::nullptr_t value) {
 		assert(value == nullptr);
 		lua_pushnil(context.mState);
+		return 1;
 	}
 };
 
 // empty arrays
 template<>
 struct LuaContext::Pusher<LuaEmptyArray_t> {
-	static const int size = 1;
-	static void push(const LuaContext& context, LuaEmptyArray_t) {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+	static int push(const LuaContext& context, LuaEmptyArray_t) {
 		lua_newtable(context.mState);
+		return 1;
 	}
 };
 
 // maps
 template<typename TKey, typename TValue>
 struct LuaContext::Pusher<std::map<TKey,TValue>> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::map<TKey,TValue>& value) {
-		static_assert(Pusher<typename std::decay<TKey>::type>::size == 1, "Can't push multiple elements for a table key");
-		static_assert(Pusher<typename std::decay<TValue>::type>::size == 1, "Can't push multiple elements for a table value");
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::map<TKey,TValue>& value) {
+		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
+		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(context.mState);
 
@@ -1335,16 +1386,20 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
 			Pusher<typename std::decay<TValue>::type>::push(context, i->second);
 			lua_settable(context.mState, -3);
 		}
+
+		return 1;
 	}
 };
 
 // unordered_maps
 template<typename TKey, typename TValue>
 struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
-		static_assert(Pusher<typename std::decay<TKey>::type>::size == 1, "Can't push multiple elements for a table key");
-		static_assert(Pusher<typename std::decay<TValue>::type>::size == 1, "Can't push multiple elements for a table value");
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::unordered_map<TKey,TValue>& value) {
+		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
+		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(context.mState);
 
@@ -1353,16 +1408,20 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 			Pusher<typename std::decay<TValue>::type>::push(context, i->second);
 			lua_settable(context.mState, -3);
 		}
+
+		return 1;
 	}
 };
 
 // vectors or pairs
 template<typename TType1, typename TType2>
 struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::vector<std::pair<TType1,TType2>>& value) {
-		static_assert(Pusher<typename std::decay<TType1>::type>::size == 1, "Can't push multiple elements for a table key");
-		static_assert(Pusher<typename std::decay<TType2>::type>::size == 1, "Can't push multiple elements for a table value");
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::vector<std::pair<TType1,TType2>>& value) {
+		static_assert(Pusher<typename std::decay<TType1>::type>::minSize == 1 && Pusher<typename std::decay<TType1>::type>::maxSize == 1, "Can't push multiple elements for a table key");
+		static_assert(Pusher<typename std::decay<TType2>::type>::minSize == 1 && Pusher<typename std::decay<TType2>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(context.mState);
 
@@ -1371,15 +1430,19 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
 			Pusher<typename std::decay<TType2>::type>::push(context, i->second);
 			lua_settable(context.mState, -3);
 		}
+
+		return 1;
 	}
 };
 
 // vectors
 template<typename TType>
 struct LuaContext::Pusher<std::vector<TType>> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::vector<TType>& value) {
-		static_assert(Pusher<typename std::decay<TType>::type>::size == 1, "Can't push multiple elements for a table value");
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::vector<TType>& value) {
+		static_assert(Pusher<typename std::decay<TType>::type>::minSize == 1 && Pusher<typename std::decay<TType>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
 		lua_newtable(context.mState);
 
@@ -1388,15 +1451,19 @@ struct LuaContext::Pusher<std::vector<TType>> {
 			Pusher<typename std::decay<TType>::type>::push(context, value[i]);
 			lua_settable(context.mState, -3);
 		}
+
+		return 1;
 	}
 };
 
 // unique_ptr
 template<typename TType>
 struct LuaContext::Pusher<std::unique_ptr<TType>> {
-	static const int size = Pusher<std::shared_ptr<TType>>::size;
-	static void push(const LuaContext& context, std::unique_ptr<TType> value) {
-		Pusher<std::shared_ptr<TType>>::push(context, std::move(value));
+	static const int minSize = Pusher<std::shared_ptr<TType>>::minSize;
+	static const int maxSize = Pusher<std::shared_ptr<TType>>::maxSize;
+
+	static int push(const LuaContext& context, std::unique_ptr<TType> value) {
+		return Pusher<std::shared_ptr<TType>>::push(context, std::move(value));
 	}
 };
 
@@ -1406,9 +1473,10 @@ template<typename TEnum>
 struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
 	typedef typename std::underlying_type<TEnum>::type
 		RealType;
-	static const int size = Pusher<RealType>::size;
-	static void push(const LuaContext& context, TEnum value) {
-		Pusher<RealType>::push(context, static_cast<RealType>(value));
+	static const int minSize = Pusher<RealType>::minSize;
+	static const int maxSize = Pusher<RealType>::maxSize;
+	static int push(const LuaContext& context, TEnum value) {
+		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
 #endif
@@ -1422,36 +1490,42 @@ struct LuaContext::Pusher<
 									>::type
 			>
 {
-	static const int size = 1;
-	static void push(const LuaContext& context, TType value) {
-		context.pushFunction<typename std::remove_pointer<TType>::type>(value);
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, TType value) {
+		return context.pushFunction<typename std::remove_pointer<TType>::type>(value);
 	}
 };
 
 // std::function
 template<typename ReturnType, typename... ParamTypes>
 struct LuaContext::Pusher<std::function<ReturnType (ParamTypes...)>> {
-	static const int size = 1;
-	static void push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
-		context.pushFunction<ReturnType (ParamTypes...)>(value);
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
+		return context.pushFunction<ReturnType (ParamTypes...)>(value);
 	}
 };
 
 // boost::variant
 template<typename... TTypes>
 struct LuaContext::Pusher<boost::variant<TTypes...>> {
-	static const int size = PusherMaxSize<TTypes...>::size;
-	static void push(const LuaContext& context, const boost::variant<TTypes...>& value) {
+	static const int minSize = PusherMinSize<TTypes...>::size;
+	static const int maxSize = PusherMaxSize<TTypes...>::size;
+
+	static int push(const LuaContext& context, const boost::variant<TTypes...>& value) {
 		VariantWriter writer{context};
-		value.apply_visitor(writer);
+		return value.apply_visitor(writer);
 	}
 
 private:
-	struct VariantWriter : public boost::static_visitor<> {
+	struct VariantWriter : public boost::static_visitor<int> {
 		template<typename TType>
-		void operator()(TType value)
+		int operator()(TType value)
 		{
-			Pusher<typename std::decay<TType>::type>::push(ctxt, std::move(value));
+			return Pusher<typename std::decay<TType>::type>::push(ctxt, std::move(value));
 		}
 
 		VariantWriter(const LuaContext& ctxt) : ctxt(ctxt) {}
@@ -1462,26 +1536,28 @@ private:
 // tuple
 template<typename... TTypes>
 struct LuaContext::Pusher<std::tuple<TTypes...>> {
-	static const int size = PusherTotalSize<TTypes...>::size;
+	static const int minSize = PusherTotalMaxSize<TTypes...>::size;
+	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
-	static void push(const LuaContext& context, const std::tuple<TTypes...>& value) {
-		push2(context, value, std::integral_constant<int,0>{});
+	static int push(const LuaContext& context, const std::tuple<TTypes...>& value) {
+		return push2(context, value, std::integral_constant<int,0>{});
 	}
 
 private:
 	template<int N>
-	static void push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+	static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
-		Pusher<typename std::decay<ElemType>::type>::push(context, std::get<N>(value));
+		const int pushed = Pusher<typename std::decay<ElemType>::type>::push(context, std::get<N>(value));
 		try {
-			push2(context, value, std::integral_constant<int,N+1>{});
+			return pushed + push2(context, value, std::integral_constant<int,N+1>{});
 		} catch(...) {
-			lua_pop(context.mState, N);
+			lua_pop(context.mState, pushed);
 			throw;
 		}
 	}
 	
-	static void push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+	static int push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return 0;
 	}
 };
 
