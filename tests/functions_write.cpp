@@ -115,3 +115,14 @@ TEST(FunctionsWrite, DestructorCalled) {
 	context.reset();
 	EXPECT_TRUE(dummy.expired());
 }
+
+TEST(FunctionsWrite, ReturningMultipleValues) {
+	LuaContext context;
+	
+	context.writeFunction("f", [](int x) { return std::make_tuple(x, x+1, "hello"); });
+	context.executeCode("a, b, c = f(2)");
+
+	EXPECT_EQ(2, context.readVariable<int>("a"));
+	EXPECT_EQ(3, context.readVariable<int>("b"));
+	EXPECT_EQ("hello", context.readVariable<std::string>("c"));
+}
