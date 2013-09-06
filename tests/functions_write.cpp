@@ -126,3 +126,23 @@ TEST(FunctionsWrite, ReturningMultipleValues) {
 	EXPECT_EQ(3, context.readVariable<int>("b"));
 	EXPECT_EQ("hello", context.readVariable<std::string>("c"));
 }
+
+TEST(FunctionsWrite, PolymorphicFunctions) {
+	LuaContext context;
+	
+	context.writeFunction("f",
+		[](boost::variant<int,bool,std::string> x) -> std::string
+		{
+			if (x.which() == 0)
+				return "int";
+			else if (x.which() == 1)
+				return "bool";
+			else
+				return "string";
+		}
+	);
+
+	EXPECT_EQ("int", context.executeCode<std::string>("return f(2)"));
+	EXPECT_EQ("bool", context.executeCode<std::string>("return f(true)"));
+	EXPECT_EQ("string", context.executeCode<std::string>("return f('test')"));
+}
