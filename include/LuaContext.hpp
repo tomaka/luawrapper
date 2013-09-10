@@ -449,7 +449,7 @@ public:
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1>([&](const RealDataType& d) { return pushFunction<TFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+				setTable<-1>([&](const RealDataType& d) { return Pusher<TFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 			}
@@ -474,7 +474,7 @@ public:
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1>([&](const RealDataType& d) { return pushFunction<DetectedFunctionType>(std::move(d)); }, std::forward<TData>(data)...);
+				setTable<-1>([&](const RealDataType& d) { return Pusher<DetectedFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 			}
