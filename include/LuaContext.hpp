@@ -315,7 +315,7 @@ public:
 	{
 		const auto getter = [=](const TObject& obj) -> TVarType { return obj.*member; };
 		const auto setter = [=](TObject& obj, const TVarType& value) { obj.*member = value; };
-		registerMember<TObject,TVarType>(name, getter, setter);
+		registerMember<TVarType (TObject::*)>(name, getter, setter);
 	}
 
 	/**
@@ -324,19 +324,33 @@ public:
 	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
 	 * @param writeFunction	 Function that takes as parameter a TObject& and a const TVarType&, and modifies the object
 	 */
-	template<typename TObject, typename TVarType>
-	void registerMember(const std::string& name, std::function<TVarType (const TObject&)> readFunction, std::function<void (TObject&, const TVarType&)> writeFunction)
+	template<typename TMemberType, typename TReadFunction, typename TWriteFunction>
+	void registerMember(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
-		registerMemberImpl<TObject,TVarType>(name, std::move(readFunction), std::move(writeFunction));
+		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
+		registerMemberImpl(tag<TMemberType>{}, name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+	}
+
+	/**
+	* Registers a non-modifiable member variable
+	* @param name			 Name of the member to register
+	* @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
+	*/
+	template<typename TMemberType, typename TReadFunction>
+	void registerMember(const std::string& name, TReadFunction readFunction)
+	{
+		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
+		registerMemberImpl(tag<TMemberType>{}, name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
 	}
 
 	/**
 	 * Registers a dynamic member variable
 	 */
-	template<typename TObject, typename TVarType>
-	void registerMember(std::function<TVarType (const TObject&, const std::string&)> readFunction, std::function<void (TObject&, const std::string&, const TVarType&)> writeFunction)
+	template<typename TMemberType, typename TReadFunction, typename TWriteFunction>
+	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
-		registerMemberImpl<TObject,TVarType>(std::move(readFunction), std::move(writeFunction));
+		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
+		registerMemberImpl(tag<TMemberType>{}, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
 	}
 	
 	/**
@@ -627,37 +641,37 @@ private:
 	}
 
 	// the "registerMember" public functions call this one
-	template<typename TObject, typename TVarType>
-	void registerMemberImpl(const std::string& name, std::function<TVarType (const TObject&)> readFunction, std::function<void (TObject&, const TVarType&)> writeFunction)
+	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
+	void registerMemberImpl(tag<TVarType (TObject::*)>, const std::string& name, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
 	{
 		static_assert(std::is_class<TObject>::value, "registerMember can only be called on a class");
 
 		if (readFunction) {
-			mRegisteredGetters[&typeid(TObject)][name] = [=](const void* object, LuaContext& ctxt) -> int {
-				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
+			mRegisteredGetters[&typeid(TObject)][name] = [readFunction](const void* object, LuaContext& ctxt) -> int {
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction.get()(*static_cast<const TObject*>(object)));
 			};
 		}
 
 		if (writeFunction) {
-			mRegisteredSetters[&typeid(TObject)][name] = [=](void* object, LuaContext& ctxt) {
-				writeFunction(*static_cast<TObject*>(object), Reader<typename std::decay<TVarType>::type>::readSafe(*this, -1));
+			mRegisteredSetters[&typeid(TObject)][name] = [writeFunction](void* object, LuaContext& ctxt) {
+				writeFunction.get()(*static_cast<TObject*>(object), Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
 			};
 		}
 	}
 
 	// the "registerMember" public functions call this one
-	template<typename TObject, typename TVarType>
-	void registerMemberImpl(std::function<TVarType (const TObject&, const std::string&)> readFunction, std::function<void (TObject&, const std::string&, const TVarType&)> writeFunction)
+	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
+	void registerMemberImpl(tag<TVarType (TObject::*)>, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
 	{
 		if (readFunction) {
-			mDefaultGetter[&typeid(TObject)] = [=](const void* object, const std::string& name, LuaContext& ctxt) -> int {
-				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
+			mDefaultGetter[&typeid(TObject)] = [readFunction](const void* object, const std::string& name, LuaContext& ctxt) -> int {
+				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction.get()(*static_cast<const TObject*>(object), name));
 			};
 		}
 
 		if (writeFunction) {
-			mDefaultSetter[&typeid(TObject)] = [=](void* object, const std::string& name, LuaContext& ctxt) {
-				writeFunction(*static_cast<TObject*>(object), name, Reader<typename std::decay<TVarType>::type>::readSafe(*this, -1));
+			mDefaultSetter[&typeid(TObject)] = [writeFunction](void* object, const std::string& name, LuaContext& ctxt) {
+				writeFunction.get()(*static_cast<TObject*>(object), name, Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
 			};
 		}
 	}

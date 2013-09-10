@@ -94,7 +94,7 @@ TEST(CustomTypes, CustomMembers) {
 	struct Object {};
     
     LuaContext context;
-	context.registerMember<Object,int>("value",
+	context.registerMember<int (Object::*)>("value",
 		[](const Object& obj) { return 2; },
 		[](Object& obj, int val) {}
 	);
