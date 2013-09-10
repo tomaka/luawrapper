@@ -1496,31 +1496,59 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 };
 #endif
 
-// C function
-template<typename TType>
-struct LuaContext::Pusher<
-	TType, typename std::enable_if<
-										std::is_function<TType>::value ||
-										(std::is_pointer<TType>::value && std::is_function<typename std::remove_pointer<TType>::type>::value)
-									>::type
-			>
+// any function
+template<typename TReturnType, typename... TParameters>
+struct LuaContext::Pusher<TReturnType (TParameters...)>
 {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
+	template<typename TType>
 	static int push(const LuaContext& context, TType value) {
-		return context.pushFunction<typename std::remove_pointer<TType>::type>(value);
+		return context.pushFunction<TReturnType (TParameters...)>(value);
+	}
+};
+
+// C function pointers
+template<typename TReturnType, typename... TParameters>
+struct LuaContext::Pusher<TReturnType (*)(TParameters...)>
+{
+	typedef Pusher<TReturnType(TParameters...)>
+		SubPusher;
+	static const int minSize = SubPusher::minSize;
+	static const int maxSize = SubPusher::maxSize;
+
+	template<typename TType>
+	static int push(const LuaContext& context, TType value) {
+		return SubPusher::push(context, value);
+	}
+};
+
+// C function references
+template<typename TReturnType, typename... TParameters>
+struct LuaContext::Pusher<TReturnType (&)(TParameters...)>
+{
+	typedef Pusher<TReturnType(TParameters...)>
+		SubPusher;
+	static const int minSize = SubPusher::minSize;
+	static const int maxSize = SubPusher::maxSize;
+
+	template<typename TType>
+	static int push(const LuaContext& context, TType value) {
+		return SubPusher::push(context, value);
 	}
 };
 
 // std::function
-template<typename ReturnType, typename... ParamTypes>
-struct LuaContext::Pusher<std::function<ReturnType (ParamTypes...)>> {
-	static const int minSize = 1;
-	static const int maxSize = 1;
+template<typename TReturnType, typename... TParameters>
+struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>> {
+	typedef Pusher<TReturnType (TParameters...)>
+		SubPusher;
+	static const int minSize = SubPusher::minSize;
+	static const int maxSize = SubPusher::maxSize;
 
-	static int push(const LuaContext& context, const std::function<ReturnType (ParamTypes...)>& value) {
-		return context.pushFunction<ReturnType (ParamTypes...)>(value);
+	static int push(const LuaContext& context, const std::function<TReturnType (TParameters...)>& value) {
+		return SubPusher::push(context, value);
 	}
 };
 
