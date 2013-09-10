@@ -64,17 +64,30 @@ TEST(CustomTypes, Members) {
 
 TEST(CustomTypes, CustomMemberFunctions) {
 	struct Object {
+		Object(int v) : value(v) {}
 		int value;
     };
     
     LuaContext context;
-	context.registerFunction<void (Object&)>("increment", [](Object& obj) { ++obj.value; });
-	context.registerFunction<int (Object&, int)>("add", [](Object& obj, int x) { obj.value += x; return obj.value; });
+	context.registerFunction<void (Object::*)()>("increment", [](Object& obj) { ++obj.value; });
+	context.registerFunction<int (Object::*)(int)>("add", [](Object& obj, int x) { obj.value += x; return obj.value; });
     
-    context.writeVariable("obj", Object{10});
-    context.executeCode("obj:increment()");
-	EXPECT_EQ(11, context.readVariable<Object>("obj").value);
-    EXPECT_EQ(14, context.executeCode<int>("return obj:add(3)"));
+	context.writeVariable("obj1", Object{10});
+	Object obj{10};
+	context.writeVariable("obj2", &obj);
+	context.writeVariable("obj3", std::make_shared<Object>(10));
+
+	context.executeCode("obj1:increment()");
+	context.executeCode("obj2:increment()");
+	context.executeCode("obj3:increment()");
+
+	EXPECT_EQ(11, context.readVariable<Object>("obj1").value);
+	EXPECT_EQ(11, context.readVariable<Object*>("obj2")->value);
+	EXPECT_EQ(11, context.readVariable<std::shared_ptr<Object>>("obj3")->value);
+
+	EXPECT_EQ(14, context.executeCode<int>("return obj1:add(3)"));
+	EXPECT_EQ(14, context.executeCode<int>("return obj2:add(3)"));
+	EXPECT_EQ(14, context.executeCode<int>("return obj3:add(3)"));
 }
 
 TEST(CustomTypes, CustomMembers) {

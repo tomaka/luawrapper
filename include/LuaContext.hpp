@@ -264,22 +264,22 @@ public:
 	template<typename TType, typename TRetValue, typename... TArgs>
 	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...))
 	{
-		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+		registerFunction<TRetValue (TType::*)(TArgs...)>(name, [f](TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
 	}
 	template<typename TType, typename TRetValue, typename... TArgs>
 	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const)
 	{
-		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](const TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+		registerFunction<TRetValue (TType::*)(TArgs...) const>(name, [f](TType const& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
 	}
 	template<typename TType, typename TRetValue, typename... TArgs>
 	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) volatile)
 	{
-		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](volatile TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+		registerFunction<TRetValue (TType::*)(TArgs...) volatile>(name, [f](TType volatile& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
 	}
 	template<typename TType, typename TRetValue, typename... TArgs>
 	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const volatile)
 	{
-		registerFunctionImpl(name, std::function<TRetValue (TType&, TArgs...)>([=](const volatile TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); }));
+		registerFunction<TRetValue (TType::*)(TArgs...) const volatile>(name, [f](TType const volatile& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
 	}
 
 	/**
@@ -291,8 +291,8 @@ public:
 	template<typename TFunctionType, typename TType>
 	void registerFunction(const std::string& functionName, TType fn)
 	{
-		static_assert(std::is_function<TFunctionType>::value, "registerFunction must take a function type as template parameter");
-		registerFunctionImpl(functionName, std::function<TFunctionType>(fn));
+		static_assert(std::is_member_function_pointer<TFunctionType>::value, "registerFunction must take a member function pointer type as template parameter");
+		registerFunctionImpl(functionName, std::move(fn), tag<TFunctionType>{});
 	}
 
 	/**
@@ -509,6 +509,10 @@ private:
 	/**************************************************/
 	/*                     MISC                       */
 	/**************************************************/
+	// type used as a tag
+	template<typename T>
+	struct tag {};
+
 	// this function takes a value representing the offset to look into
 	// it will look into the top element of the stack and replace the element by its content at the given index
 	template<typename OffsetType1, typename... OffsetTypeOthers>
@@ -569,7 +573,7 @@ private:
 		lua_pop(mState, nb);
 		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(mState, lua_type(mState, -nb)), typeid(TReturnType)};
-		return std::move(val.get());
+		return val.get();
 	}
 
 	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
@@ -586,25 +590,40 @@ private:
 	/*            FUNCTIONS REGISTRATION              */
 	/**************************************************/
 	// the "registerFunction" public functions call this one
-	template<typename TRetValue, typename TParam1, typename... TOtherParams>
-	void registerFunctionImpl(const std::string& functionName, std::function<TRetValue (TParam1, TOtherParams...)> function)
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...)>)
 	{
-		static_assert(std::is_class<typename std::decay<TParam1>::type>::value || std::is_pointer<TParam1>::value, "registerFunction can only be called on a class or a pointer");
+		static_assert(std::is_class<TObject>::value, "registerFunction can only be used for a class");
 
-		mRegisteredGetters[&typeid(typename std::decay<TParam1>::type)][functionName] =
+		mRegisteredGetters[&typeid(TObject)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue (TParam1, TOtherParams...)>::push(ctxt, function);
+				return Pusher<TRetValue (TObject&, TOtherParams...)>::push(ctxt, std::move(function));
 			};
 
-		mRegisteredGetters[&typeid(typename std::decay<TParam1>::type*)][functionName] =
+		mRegisteredGetters[&typeid(TObject*)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue (typename std::decay<TParam1>::type*, TOtherParams...)>::push(ctxt, [=](typename std::decay<TParam1>::type* obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
+				return Pusher<TRetValue(TObject*, TOtherParams...)>::push(ctxt, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
 			};
 
-		mRegisteredGetters[&typeid(std::shared_ptr<typename std::decay<TParam1>::type>)][functionName] =
+		mRegisteredGetters[&typeid(std::shared_ptr<TObject>)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue (std::shared_ptr<typename std::decay<TParam1>::type>, TOtherParams...)>::push(*this, [=](std::shared_ptr<typename std::decay<TParam1>::type> obj, TOtherParams... rest) { return function(*obj, std::forward<TOtherParams>(rest)...); });
+				return Pusher<TRetValue(std::shared_ptr<TObject>, TOtherParams...)>::push(*this, [=](std::shared_ptr<TObject> obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
 			};
+	}
+
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const>) {
+		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
+	}
+
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) volatile>) {
+		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
+	}
+
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const volatile>) {
+		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
 	}
 
 	// the "registerMember" public functions call this one
