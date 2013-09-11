@@ -254,6 +254,86 @@ In this example we return at the same time an int and a string.
 The C++ equivalent for `nil` is `nullptr`.
 
 
+#### Example 10: custom member functions
+
+In example 3, we saw that you can register functions for a given type with `registerFunction`.
+
+But you can also register functions that don't exist in the class.
+To do so, you need to pass as template parameter a pointer-to-member-function type, and as
+parameter a function or function object that takes as first parameter a reference to the object.
+
+    struct Foo { int value; };
+
+    LuaContext lua;
+    
+    lua.registerFunction<void (Foo::*)(int)>("add", [](Foo& object, int num) { object.value += num; });
+
+    lua.writeVariable("a", Foo{5});
+    lua.executeCode("a:add(3)");
+
+    std::cout << lua.readVariable<Foo>("a").value;  // 8
+
+There is an alternative syntax if you want to register a function for a pointer type, because it is illegal to write `void (Foo*::*)(int)`.
+
+    lua.registerFunction<Foo, void (int)>("add", [](Foo& object, int num) { object.value += num; });
+
+
+#### Example 11: member objects and custom member objects
+
+You can also register member variables for objects.
+
+    struct Foo { int value; };
+
+    LuaContext lua;
+
+    lua.registerMember("value", &Foo::value);
+
+    lua.writeVariable("a", Foo{});
+
+    lua.executeCode("a:value = 14");
+    std::cout << lua.readVariable<Foo>("a").value;  // 14
+
+Just like `registerFunction`, you can register virtual member variables.
+
+The second parameter is a function or function object that is called in order to read the value of the variable.
+The third parameter is a function or function object that is called in order to write the value. The third parameter is optional.
+    
+    lua.registerMember<bool (Foo::*)>("higher_than_five",
+        [](Foo& object) -> bool { return object.value >= 5; },
+        [](Foo& object, bool higher_than_five) {
+            // called when lua code wants to modify the variable
+            if (higher_than_five) object.value = 6;
+            else object.value = 4;
+        }
+    );
+
+    lua.writeVariable("a", Foo{8});
+    std::cout << lua.executeCode<bool>("return a:higher_than_five");    // true
+
+    lua.writeVariable("b", Foo{1});
+    std::cout << lua.executeCode<bool>("return b:higher_than_five");    // false
+
+The alternative syntax also exists.
+
+    lua.registerMember<Foo, bool>("higher_than_five", ...same as above...);
+
+Finally you can register functions that will be called when a non-existing variable is read or written.
+The syntax is the same than above, except that you don't pass the name of the variable and that the read and write functions take an extra `name` parameter.
+    
+    lua.registerMember<boost::variant<int,bool> (Foo::*)>(
+        [](Foo& object, const std::string& memberName) -> boost::variant<int,bool> {
+            if (memberName == "value")
+                return object.value;
+            else
+                return false;
+        },
+        [](Foo& object, const std::string& memberName, boost::variant<int,bool> value) {
+            if (memberName == "value")
+                object.value = boost::get<int>(value);
+        }
+    );
+
+
 ### Compilation
 This code uses new functionalities from [C++11](http://en.wikipedia.org/wiki/C%2B%2B11).
 
