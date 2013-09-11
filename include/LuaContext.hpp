@@ -830,6 +830,7 @@ private:
 				throw std::bad_alloc();
 			else if (loadReturnValue == LUA_ERRSYNTAX)
 				throw SyntaxErrorException{errorMsg};
+			throw std::runtime_error("Error while calling lua_load: " + errorMsg);
 		}
 	}
 	
@@ -847,6 +848,7 @@ private:
 				throw std::bad_alloc();
 			else if (loadReturnValue == LUA_ERRSYNTAX)
 				throw SyntaxErrorException{errorMsg};
+			throw std::runtime_error("Error while calling lua_load: " + errorMsg);
 		}
 	}
 
