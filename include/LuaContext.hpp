@@ -344,7 +344,7 @@ public:
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
-		registerMemberImpl<TObject,TVarType>(name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+		registerMemberImpl<TObject,TVarType>(name, std::move(readFunction), std::move(writeFunction));
 	}
 
 	/**
@@ -358,7 +358,7 @@ public:
 	void registerMember(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
-		registerMemberImpl(tag<TMemberType>{}, name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+		registerMemberImpl(tag<TMemberType>{}, name, std::move(readFunction), std::move(writeFunction));
 	}
 
 	/**
@@ -371,7 +371,7 @@ public:
 	template<typename TObject, typename TVarType, typename TReadFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction)
 	{
-		registerMemberImpl<TObject,TVarType>(name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional < std::function < void() >> {});
+		registerMemberImpl<TObject,TVarType>(name, std::move(readFunction));
 	}
 
 	/**
@@ -384,7 +384,7 @@ public:
 	void registerMember(const std::string& name, TReadFunction readFunction)
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
-		registerMemberImpl(tag<TMemberType>{}, name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
+		registerMemberImpl(tag<TMemberType>{}, name, std::move(readFunction));
 	}
 
 	/**
@@ -395,7 +395,7 @@ public:
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
-		registerMemberImpl<TObject,TVarType>(boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+		registerMemberImpl<TObject,TVarType>(std::move(readFunction), std::move(writeFunction));
 	}
 
 	/**
@@ -406,7 +406,7 @@ public:
 	template<typename TObject, typename TVarType, typename TReadFunction>
 	void registerMember(TReadFunction readFunction)
 	{
-		registerMemberImpl<TObject, TVarType>(boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
+		registerMemberImpl<TObject, TVarType>(std::move(readFunction));
 	}
 
 	/**
@@ -417,7 +417,7 @@ public:
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
-		registerMemberImpl(tag<TMemberType>{}, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+		registerMemberImpl(tag<TMemberType>{}, std::move(readFunction), std::move(writeFunction));
 	}
 
 	/**
@@ -428,7 +428,7 @@ public:
 	void registerMember(TReadFunction readFunction)
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
-		registerMemberImpl(tag<TMemberType>{}, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
+		registerMemberImpl(tag<TMemberType>{}, std::move(readFunction));
 	}
 	
 	/**
@@ -685,7 +685,7 @@ private:
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TObject>, tag<TRetValue (TOtherParams...)>)
 	{
-		static_assert(std::is_class<TObject>::value, "registerFunction can only be used for a class");
+		static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerFunction can only be used for a class or a pointer");
 
 		mRegisteredGetters[&typeid(TObject)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
@@ -725,51 +725,64 @@ private:
 	}
 
 	// the "registerMember" public functions call this one
-	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
-	void registerMemberImpl(const std::string& name, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMemberImpl(const std::string& name, TReadFunction readFunction)
 	{
 		static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerMember can only be called on a class or a pointer");
-
-		if (readFunction) {
-			mRegisteredGetters[&typeid(TObject)][name] = [readFunction](const void* object, LuaContext& ctxt) -> int {
-				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction.get()(*static_cast<const TObject*>(object)));
-			};
-		}
-
-		if (writeFunction) {
-			mRegisteredSetters[&typeid(TObject)][name] = [writeFunction](void* object, LuaContext& ctxt) {
-				writeFunction.get()(*static_cast<TObject*>(object), Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
-			};
-		}
+		mRegisteredGetters[&typeid(TObject)][name] = [readFunction](const void* object, LuaContext& ctxt) -> int {
+			return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
+		};
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
-	void registerMemberImpl(tag<TVarType (TObject::*)>, const std::string& name, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
+	void registerMemberImpl(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
+	{
+		registerMemberImpl<TObject,TVarType>(name, readFunction);
+		mRegisteredSetters[&typeid(TObject)][name] = [writeFunction](void* object, LuaContext& ctxt) {
+			writeFunction(*static_cast<TObject*>(object), Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
+		};
+	}
+
+	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
+	void registerMemberImpl(tag<TVarType (TObject::*)>, const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(name, std::move(readFunction), std::move(writeFunction));
 	}
 
-	// the "registerMember" public functions call this one
-	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
-	void registerMemberImpl(boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMemberImpl(tag<TVarType(TObject::*)>, const std::string& name, TReadFunction readFunction)
 	{
-		if (readFunction) {
-			mDefaultGetter[&typeid(TObject)] = [readFunction](const void* object, const std::string& name, LuaContext& ctxt) -> int {
-				return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction.get()(*static_cast<const TObject*>(object), name));
-			};
-		}
+		registerMemberImpl<TObject, TVarType>(name, std::move(readFunction));
+	}
 
-		if (writeFunction) {
-			mDefaultSetter[&typeid(TObject)] = [writeFunction](void* object, const std::string& name, LuaContext& ctxt) {
-				writeFunction.get()(*static_cast<TObject*>(object), name, Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
-			};
-		}
+	// the "registerMember" public functions call this one
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMemberImpl(TReadFunction readFunction)
+	{
+		mDefaultGetter[&typeid(TObject)] = [readFunction](const void* object, const std::string& name, LuaContext& ctxt) -> int {
+			return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
+		};
+	}
+
+	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
+	void registerMemberImpl(TReadFunction readFunction, TWriteFunction writeFunction)
+	{
+		registerMemberImpl<TObject,TVarType>(readFunction);
+		mDefaultSetter[&typeid(TObject)] = [writeFunction](void* object, const std::string& name, LuaContext& ctxt) {
+			writeFunction(*static_cast<TObject*>(object), name, Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
+		};
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMemberImpl(tag<TVarType (TObject::*)>, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(std::move(readFunction), std::move(writeFunction));
+	}
+
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMemberImpl(tag<TVarType(TObject::*)>, TReadFunction readFunction)
+	{
+		registerMemberImpl<TObject, TVarType>(std::move(readFunction));
 	}
 	
 
