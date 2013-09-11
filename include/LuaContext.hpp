@@ -286,6 +286,7 @@ public:
 	 * Adds a custom function to a type
 	 * The type is determined by the function's first parameter
 	 * @param fn Function which takes as first parameter a std::shared_ptr
+	 * @tparam TObject			Object to register this function to
 	 * @tparam Function type of fn
 	 */
 	template<typename TFunctionType, typename TType>
@@ -293,6 +294,20 @@ public:
 	{
 		static_assert(std::is_member_function_pointer<TFunctionType>::value, "registerFunction must take a member function pointer type as template parameter");
 		registerFunctionImpl(functionName, std::move(fn), tag<TFunctionType>{});
+	}
+
+	/**
+	 * Adds a custom function to a type
+	 * The type is determined by the function's first parameter
+	 * @param fn Function which takes as first parameter an object
+	 * @tparam TObject			Object to register this function to
+	 * @tparam TFunctionType type of fn
+	 */
+	template<typename TObject, typename TFunctionType, typename TType>
+	void registerFunction(const std::string& functionName, TType fn)
+	{
+		static_assert(std::is_function<TFunctionType>::value, "registerFunction must take a function type as template parameter");
+		registerFunctionImpl(functionName, std::move(fn), tag<TObject>{}, tag<TFunctionType>{});
 	}
 
 	/**
@@ -668,39 +683,45 @@ private:
 	/**************************************************/
 	// the "registerFunction" public functions call this one
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
-	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...)>)
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TObject>, tag<TRetValue (TOtherParams...)>)
 	{
 		static_assert(std::is_class<TObject>::value, "registerFunction can only be used for a class");
 
 		mRegisteredGetters[&typeid(TObject)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue (TObject&, TOtherParams...)>::push(ctxt, std::move(function));
-			};
+				return Pusher<TRetValue(TObject&, TOtherParams...)>::push(ctxt, std::move(function));
+		};
 
 		mRegisteredGetters[&typeid(TObject*)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
 				return Pusher<TRetValue(TObject*, TOtherParams...)>::push(ctxt, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
-			};
+		};
 
 		mRegisteredGetters[&typeid(std::shared_ptr<TObject>)][functionName] =
 			[=](const void*, LuaContext& ctxt) -> int {
 				return Pusher<TRetValue(std::shared_ptr<TObject>, TOtherParams...)>::push(*this, [=](std::shared_ptr<TObject> obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
-			};
+		};
+	}
+
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...)>)
+	{
+		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const>) {
-		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
+		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) volatile>) {
-		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
+		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const volatile>) {
-		registerFunctionImpl(functionName, std::move(function), tag < TRetValue(TObject::*)(TOtherParams...)>{});
+		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	// the "registerMember" public functions call this one

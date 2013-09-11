@@ -70,7 +70,7 @@ TEST(CustomTypes, CustomMemberFunctions) {
     
     LuaContext context;
 	context.registerFunction<void (Object::*)()>("increment", [](Object& obj) { ++obj.value; });
-	context.registerFunction<int (Object::*)(int)>("add", [](Object& obj, int x) { obj.value += x; return obj.value; });
+	context.registerFunction<Object, int (int)>("add", [](Object& obj, int x) { obj.value += x; return obj.value; });
     
 	context.writeVariable("obj1", Object{10});
 	Object obj{10};
