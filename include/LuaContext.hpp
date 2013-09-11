@@ -261,25 +261,11 @@ public:
 	/**
 	 * Tells that lua will be allowed to access an object's function
 	 */
-	template<typename TType, typename TRetValue, typename... TArgs>
-	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...))
+	template<typename TPointerToMemberFunction>
+	auto registerFunction(const std::string& name, TPointerToMemberFunction pointer)
+		-> typename std::enable_if<std::is_member_function_pointer<TPointerToMemberFunction>::value>::type
 	{
-		registerFunction<TRetValue (TType::*)(TArgs...)>(name, [f](TType& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
-	}
-	template<typename TType, typename TRetValue, typename... TArgs>
-	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const)
-	{
-		registerFunction<TRetValue (TType::*)(TArgs...) const>(name, [f](TType const& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
-	}
-	template<typename TType, typename TRetValue, typename... TArgs>
-	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) volatile)
-	{
-		registerFunction<TRetValue (TType::*)(TArgs...) volatile>(name, [f](TType volatile& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
-	}
-	template<typename TType, typename TRetValue, typename... TArgs>
-	void registerFunction(const std::string& name, TRetValue (TType::*f)(TArgs...) const volatile)
-	{
-		registerFunction<TRetValue (TType::*)(TArgs...) const volatile>(name, [f](TType const volatile& obj, TArgs&&... params) { return (obj.*f)(std::forward<TArgs>(params)...); });
+		registerFunctionImpl(name, std::mem_fn(pointer), tag<TPointerToMemberFunction>{});
 	}
 
 	/**
