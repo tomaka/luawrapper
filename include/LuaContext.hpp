@@ -306,7 +306,7 @@ public:
 		mRegisteredGetters[&typeid(typename std::decay<TType>::type*)].erase(functionName);
 		mRegisteredGetters[&typeid(std::shared_ptr<typename std::decay<TType>::type>)].erase(functionName);
 	}
-
+	
 	/**
 	 * Registers a member variable
 	 */
@@ -334,6 +334,7 @@ public:
 
 	/**
 	 * Registers a member variable
+	 * @tparam TMemberType 	 Pointer to member object representing the type
 	 * @param name			 Name of the member to register
 	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
 	 * @param writeFunction	 Function that takes as parameter a TObject& and a const TVarType&, and modifies the object
@@ -346,10 +347,24 @@ public:
 	}
 
 	/**
-	* Registers a non-modifiable member variable
-	* @param name			 Name of the member to register
-	* @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
-	*/
+	 * Registers a non-modifiable member variable
+	 * @tparam TObject 		 Type to register the member to
+	 * @tparam TVarType		 Type of the member
+	 * @param name			 Name of the member to register
+	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
+	 */
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMember(const std::string& name, TReadFunction readFunction)
+	{
+		registerMemberImpl<TObject,TVarType>(name, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional < std::function < void() >> {});
+	}
+
+	/**
+	 * Registers a non-modifiable member variable
+	 * @tparam TMemberType 	 Pointer to member object representing the type
+	 * @param name			 Name of the member to register
+	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
+	 */
 	template<typename TMemberType, typename TReadFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction)
 	{
@@ -359,6 +374,8 @@ public:
 
 	/**
 	 * Registers a dynamic member variable
+	 * @tparam TObject 		 Type to register the member to
+	 * @tparam TVarType		 Type of the member
 	 */
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
@@ -367,13 +384,36 @@ public:
 	}
 
 	/**
+	 * Registers a dynamic non-modifiable member variable
+	 * @tparam TObject 		 Type to register the member to
+	 * @tparam TVarType		 Type of the member
+	 */
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMember(TReadFunction readFunction)
+	{
+		registerMemberImpl<TObject, TVarType>(boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
+	}
+
+	/**
 	 * Registers a dynamic member variable
+	 * @tparam TMemberType 	 Pointer to member object representing the type
 	 */
 	template<typename TMemberType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
 		registerMemberImpl(tag<TMemberType>{}, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<TWriteFunction>{std::move(writeFunction)});
+	}
+
+	/**
+	 * Registers a dynamic non-modifiable member variable
+	 * @tparam TMemberType 	 Pointer to member object representing the type
+	 */
+	template<typename TMemberType, typename TReadFunction>
+	void registerMember(TReadFunction readFunction)
+	{
+		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
+		registerMemberImpl(tag<TMemberType>{}, boost::optional<TReadFunction>{std::move(readFunction)}, boost::optional<std::function<void ()>>{});
 	}
 	
 	/**
