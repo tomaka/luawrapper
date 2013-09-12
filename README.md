@@ -35,8 +35,8 @@ All the files outside of the `include` directory are only for testing purposes a
 
 ### I have the old (2010) version of your library, what did change?
 * you need an up-to-date compiler now
-* you now need some headers-only library from boost
-* breaking change: `LuaContext` is no longer in the the `Lua` namespace
+* you now need some headers-only libraries from [Boost](http://boost.org)
+* breaking change: `LuaContext` is no longer in the `Lua` namespace
 * breaking change: you can't pass directly lambdas to `writeVariable` anymore, use `writeFunction` instead or convert them to `std::function`
 * breaking change: the functions `clearVariable`, `doesVariableExist`, `writeEmptyArray` and `callLuaFunction` no longer exist, but you can reproduce their effect with `writeVariable` and `readVariable`
 * a lot of features have been added: lua arrays, polymorphic functions, etc.
@@ -290,7 +290,7 @@ You can also register member variables for objects.
 
     lua.writeVariable("a", Foo{});
 
-    lua.executeCode("a:value = 14");
+    lua.executeCode("a.value = 14");
     std::cout << lua.readVariable<Foo>("a").value;  // 14
 
 Just like `registerFunction`, you can register virtual member variables.
@@ -308,10 +308,10 @@ The third parameter is a function or function object that is called in order to 
     );
 
     lua.writeVariable("a", Foo{8});
-    std::cout << lua.executeCode<bool>("return a:higher_than_five");    // true
+    std::cout << lua.executeCode<bool>("return a.higher_than_five");    // true
 
     lua.writeVariable("b", Foo{1});
-    std::cout << lua.executeCode<bool>("return b:higher_than_five");    // false
+    std::cout << lua.executeCode<bool>("return b.higher_than_five");    // false
 
 The alternative syntax also exists.
 
