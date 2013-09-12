@@ -2201,7 +2201,7 @@ struct LuaContext::Reader<boost::optional<TType>>
 	static auto read(const LuaContext& context, int index)
 		-> boost::optional<TType>
 	{
-		return lua_isnil(context.mState, index) ? boost::optional<TType>{} : SubReader::read(context, index);
+		return lua_isnil(context.mState, index) ? boost::optional<TType>{} : boost::optional<TType>{SubReader::read(context, index)};
 	}
 
 	static auto testRead(const LuaContext& context, int index)
