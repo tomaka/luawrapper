@@ -614,22 +614,25 @@ private:
 	template<int TTableIndex, typename TDataType, typename TIndex, typename TData>
 	void setTable(TIndex&& index, TData&& data) {
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
-		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
+		try { Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 2;
 		assert(lua_istable(mState, tableIndex));
 		lua_settable(mState, tableIndex);
 	}
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const std::string& index, TData&& data) {
-		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
+		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
 		assert(lua_istable(mState, tableIndex));
 		lua_setfield(mState, tableIndex, index.c_str());
 	}
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const char* index, TData&& data) {
-		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
+		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
 		assert(lua_istable(mState, tableIndex));
 		lua_setfield(mState, tableIndex, index);
