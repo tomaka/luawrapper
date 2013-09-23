@@ -130,6 +130,16 @@ public:
 	}
 
 	/**
+	 * Copy is forbidden
+	 */
+	LuaContext(const LuaContext&) = delete;
+	
+	/**
+	 * Copy is forbidden
+	 */
+	LuaContext& operator=(const LuaContext&) = delete;
+
+	/**
 	 * Destructor
 	 */
 	~LuaContext()
@@ -564,15 +574,9 @@ public:
 	
 
 private:
-	// forbidding copy
-	LuaContext(const LuaContext&);
-	LuaContext& operator=(const LuaContext&);
-
-
 	// the state is the most important variable in the class since it is our interface with Lua
-	// the mutex is here because the lua design is not thread safe (based on a stack)
-	//   eg. if multiple thread call "writeVariable" at the same time, we don't want them to be executed simultaneously
-	// the mutex should be locked by all public functions that use the stack
+	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
+	// it is available for everything that needs it and its offset is at &typeid(LuaContext)
 	lua_State*					mState;
 
 	// these variables store the list of getters and setters registered for a custom type
