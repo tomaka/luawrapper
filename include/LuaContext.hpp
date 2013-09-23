@@ -498,20 +498,20 @@ public:
 	template<typename... TData>
 	void writeVariable(TData&&... data) {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeVariable");
-		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
 			RealDataType;
 		static_assert(!std::is_same<typename Tupleizer<RealDataType>::type,RealDataType>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
 
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
+				setTable<-1,RealDataType>(std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 			}
 			lua_pop(mState, 1);
 #		else
-			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<typename std::decay<RealDataType>::type>::push(*this, d); }, std::forward<TData>(data)...);
+			setTable<LUA_GLOBALSINDEX,RealDataType>(std::forward<TData>(data)...);
 #		endif
 	}
 	
@@ -521,19 +521,19 @@ public:
 	template<typename TFunctionType, typename... TData>
 	void writeFunction(TData&&... data) {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
-		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
 			RealDataType;
 		
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1>([&](const RealDataType& d) { return Pusher<TFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
+				setTable<-1,TFunctionType>(std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 			}
 			lua_pop(mState, 1);
 #		else
-			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<TFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
+			setTable<LUA_GLOBALSINDEX,TFunctionType>(std::forward<TData>(data)...);
 #		endif
 	}
 
@@ -544,7 +544,7 @@ public:
 	template<typename... TData>
 	void writeFunction(TData&&... data) {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
-		typedef typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type
+		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
 			RealDataType;
 		typedef typename FunctionTypeDetector<RealDataType>::type
 			DetectedFunctionType;
@@ -552,13 +552,13 @@ public:
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1>([&](const RealDataType& d) { return Pusher<DetectedFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
+				setTable<-1,DetectedFunctionType>(std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 			}
 			lua_pop(mState, 1);
 #		else
-			setTable<LUA_GLOBALSINDEX>([&](const RealDataType& d) { return Pusher<DetectedFunctionType>::push(*this, std::move(d)); }, std::forward<TData>(data)...);
+			setTable<LUA_GLOBALSINDEX,DetectedFunctionType>(std::forward<TData>(data)...);
 #		endif
 	}
 	
@@ -604,35 +604,35 @@ private:
 	}
 	void lookIntoStackTop() const {
 	}
-
+	
 	// equivalent of lua_settable with t[k]=n, where t is the value at the index in the template parameter, k is the second parameter, n is the last parameter, and n is pushed by the function in the first parameter
 	// if there are more than 3 parameters, parameters 3 to n-1 are considered as sub-indices into the array
 	// the dataPusher MUST push only one thing on the stack
 	// TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
-	template<int TTableIndex, typename TDataPusher, typename TIndex, typename TData>
-	void setTable(const TDataPusher& dataPusher, TIndex&& index, TData&& data) {
+	template<int TTableIndex, typename TDataType, typename TIndex, typename TData>
+	void setTable(TIndex&& index, TData&& data) {
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
-		try { dataPusher(data); } catch(...) { lua_pop(mState, 1); }
+		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
 		lua_settable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 2);
 	}
-	template<int TTableIndex, typename TDataPusher, typename TData>
-	void setTable(const TDataPusher& dataPusher, const std::string& index, TData&& data) {
-		dataPusher(data);
+	template<int TTableIndex, typename TDataType, typename TData>
+	void setTable(const std::string& index, TData&& data) {
+		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
 		lua_setfield(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1, index.c_str());
 	}
-	template<int TTableIndex, typename TDataPusher, typename TData>
-	void setTable(const TDataPusher& dataPusher, const char* index, TData&& data) {
-		dataPusher(data);
+	template<int TTableIndex, typename TDataType, typename TData>
+	void setTable(const char* index, TData&& data) {
+		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
 		lua_setfield(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1, index);
 	}
-	template<int TTableIndex, typename TDataPusher, typename TIndex1, typename TIndex2, typename... TIndices>
-	void setTable(const TDataPusher& dataPusher, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
+	template<int TTableIndex, typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
+	void setTable(TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex1>::type>::push(*this, std::forward<TIndex1>(index1));
 		lua_gettable(mState, TTableIndex < -100 || TTableIndex > 0 ? TTableIndex : TTableIndex - 1);
 		try {
-			setTable<-1>(dataPusher, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+			setTable<-1,TDataType>(std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
 		} catch(...) {
 			lua_pop(mState, 1);
 			throw;
