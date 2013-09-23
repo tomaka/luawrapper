@@ -616,26 +616,30 @@ private:
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
 		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
-		assert(lua_istable(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 2));
-		lua_settable(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 2);
+		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 2;
+		assert(lua_istable(mState, tableIndex));
+		lua_settable(mState, tableIndex);
 	}
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const std::string& index, TData&& data) {
 		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
-		assert(lua_istable(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1));
-		lua_setfield(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1, index.c_str());
+		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+		assert(lua_istable(mState, tableIndex));
+		lua_setfield(mState, tableIndex, index.c_str());
 	}
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const char* index, TData&& data) {
 		try { Pusher<TDataType>::push(*this, std::forward<TData>(data)); } catch(...) { lua_pop(mState, 1); throw; }
-		assert(lua_istable(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1));
-		lua_setfield(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1, index);
+		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+		assert(lua_istable(mState, tableIndex));
+		lua_setfield(mState, tableIndex, index);
 	}
 	template<int TTableIndex, typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
 	void setTable(TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex1>::type>::push(*this, std::forward<TIndex1>(index1));
-		lua_gettable(mState, (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1);
+		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+		lua_gettable(mState, tableIndex);
 		try {
 			setTable<-1,TDataType>(std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
 		} catch(...) {
