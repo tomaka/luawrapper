@@ -103,11 +103,7 @@ public:
 	 *
 	 */
 	LuaContext(LuaContext&& s) :
-		mState(s.mState),
-		mRegisteredGetters(std::move(s.mRegisteredGetters)),
-		mDefaultGetter(std::move(s.mDefaultGetter)),
-		mRegisteredSetters(std::move(s.mRegisteredSetters)),
-		mDefaultSetter(std::move(s.mDefaultSetter))
+		mState(s.mState)
 	{
 		s.mState = luaL_newstate();
 		updateRegistryPointer();
@@ -120,10 +116,6 @@ public:
 	LuaContext& operator=(LuaContext&& s)
 	{
 		std::swap(mState, s.mState);
-		std::swap(mRegisteredGetters, s.mRegisteredGetters);
-		std::swap(mDefaultGetter, s.mDefaultGetter);
-		std::swap(mRegisteredSetters, s.mRegisteredSetters);
-		std::swap(mDefaultSetter, s.mDefaultSetter);
 		updateRegistryPointer();
 		s.updateRegistryPointer();
 		return *this;
@@ -313,9 +305,20 @@ public:
 	template<typename TType>
 	void unregisterFunction(const std::string& functionName)
 	{
-		mRegisteredGetters[&typeid(typename std::decay<TType>::type)].erase(functionName);
-		mRegisteredGetters[&typeid(typename std::decay<TType>::type*)].erase(functionName);
-		mRegisteredGetters[&typeid(std::shared_ptr<typename std::decay<TType>::type>)].erase(functionName);
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(TType)));
+		lua_pushnil(mState);
+		lua_settable(mState, LUA_REGISTRYINDEX);
+		checkTypeRegistration(&typeid(TType));
+		
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(TType*)));
+		lua_pushnil(mState);
+		lua_settable(mState, LUA_REGISTRYINDEX);
+		checkTypeRegistration(&typeid(TType*));
+		
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(std::shared_ptr<TType>)));
+		lua_pushnil(mState);
+		lua_settable(mState, LUA_REGISTRYINDEX);
+		checkTypeRegistration(&typeid(std::shared_ptr<TType>));
 	}
 	
 	/**
@@ -575,19 +578,14 @@ public:
 
 private:
 	// the state is the most important variable in the class since it is our interface with Lua
-	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
-	// it is available for everything that needs it and its offset is at &typeid(LuaContext)
+	//  - there is a permanent pointer to the LuaContext* stored in the lua state's registry
+	//    it is available for everything that needs it and its offset is at &typeid(LuaContext)
+	//  - registered members and functions are stored in tables at offset &typeid(type) of the registry
+	//    each table has its getter functions at offset 0, getter members at offset 1, default getter at offset 2
+	//	  setter functions at offste 3, setter members at offset 4, default setter at offset 5
 	lua_State*					mState;
-
-	// these variables store the list of getters and setters registered for a custom type
-	// for example if you write a shared_ptr<Foo> to a variable named "a", and a script is executed with "a.something", then "something" will be looked for in one of these tables
-	// the function will push the return value 
-	std::unordered_map<const std::type_info*,std::unordered_map<std::string,std::function<int (const void*, LuaContext&)>>>		mRegisteredGetters;
-	std::unordered_map<const std::type_info*,std::function<int (const void*, const std::string&, LuaContext&)>>					mDefaultGetter;
-	std::unordered_map<const std::type_info*,std::unordered_map<std::string, std::function<void (void*, LuaContext&)>>>			mRegisteredSetters;
-	std::unordered_map<const std::type_info*,std::function<void (void*, const std::string&, LuaContext&)>>						mDefaultSetter;
-
 	
+
 	/**************************************************/
 	/*                     MISC                       */
 	/**************************************************/
@@ -666,7 +664,39 @@ private:
 		lua_pushlightuserdata(mState, this);
 		lua_settable(mState, LUA_REGISTRYINDEX);
 	}
-		
+
+	// checks that the offsets for a type's registrations are set in the registry
+	void checkTypeRegistration(const std::type_info* type) const
+	{
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(type));
+		lua_gettable(mState, LUA_REGISTRYINDEX);
+		if (!lua_isnil(mState, -1)) {
+			lua_pop(mState, 1);
+			return;
+		}
+
+		lua_pushlightuserdata(mState, const_cast<std::type_info*>(type));
+		lua_newtable(mState);
+
+		lua_pushinteger(mState, 0);
+		lua_newtable(mState);
+		lua_settable(mState, -3);
+
+		lua_pushinteger(mState, 1);
+		lua_newtable(mState);
+		lua_settable(mState, -3);
+
+		lua_pushinteger(mState, 3);
+		lua_newtable(mState);
+		lua_settable(mState, -3);
+
+		lua_pushinteger(mState, 4);
+		lua_newtable(mState);
+		lua_settable(mState, -3);
+
+		lua_settable(mState, LUA_REGISTRYINDEX);
+	}
+	
 
 	/**************************************************/
 	/*            FUNCTIONS REGISTRATION              */
@@ -677,20 +707,14 @@ private:
 	{
 		static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerFunction can only be used for a class or a pointer");
 
-		mRegisteredGetters[&typeid(TObject)][functionName] =
-			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue(TObject&, TOtherParams...)>::push(ctxt, std::move(function));
-		};
-
-		mRegisteredGetters[&typeid(TObject*)][functionName] =
-			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue(TObject*, TOtherParams...)>::push(ctxt, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
-		};
-
-		mRegisteredGetters[&typeid(std::shared_ptr<TObject>)][functionName] =
-			[=](const void*, LuaContext& ctxt) -> int {
-				return Pusher<TRetValue(std::shared_ptr<TObject>, TOtherParams...)>::push(*this, [=](std::shared_ptr<TObject> obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
-		};
+		checkTypeRegistration(&typeid(TObject));
+		setTable<LUA_REGISTRYINDEX,TRetValue(TObject&, TOtherParams...)>(&typeid(TObject), 0, functionName, std::move(function));
+		
+		checkTypeRegistration(&typeid(TObject*));
+		setTable<LUA_REGISTRYINDEX,TRetValue(TObject*, TOtherParams...)>(&typeid(TObject*), 0, functionName, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject>));
+		setTable<LUA_REGISTRYINDEX,TRetValue(std::shared_ptr<TObject>, TOtherParams...)>(&typeid(std::shared_ptr<TObject>), 0, functionName, [=](const std::shared_ptr<TObject>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
@@ -719,18 +743,20 @@ private:
 	void registerMemberImpl(const std::string& name, TReadFunction readFunction)
 	{
 		static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerMember can only be called on a class or a pointer");
-		mRegisteredGetters[&typeid(TObject)][name] = [readFunction](const void* object, LuaContext& ctxt) -> int {
-			return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object)));
-		};
+		
+		checkTypeRegistration(&typeid(TObject));
+		setTable<LUA_REGISTRYINDEX,TVarType (TObject const&)>(&typeid(TObject), 1, name, [readFunction](TObject const& object) {
+			return readFunction(object);
+		});
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMemberImpl(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(name, readFunction);
-		mRegisteredSetters[&typeid(TObject)][name] = [writeFunction](void* object, LuaContext& ctxt) {
-			writeFunction(*static_cast<TObject*>(object), Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
-		};
+		setTable<LUA_REGISTRYINDEX,void (TObject&,TVarType)>(&typeid(TObject), 4, name, [writeFunction](TObject& object, const TVarType& value) {
+			writeFunction(object, value);
+		});
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
@@ -749,22 +775,23 @@ private:
 	template<typename TObject, typename TVarType, typename TReadFunction>
 	void registerMemberImpl(TReadFunction readFunction)
 	{
-		mDefaultGetter[&typeid(TObject)] = [readFunction](const void* object, const std::string& name, LuaContext& ctxt) -> int {
-			return Pusher<typename std::decay<TVarType>::type>::push(ctxt, readFunction(*static_cast<const TObject*>(object), name));
-		};
+		checkTypeRegistration(&typeid(TObject));
+		setTable<LUA_REGISTRYINDEX,TVarType (TObject const&, std::string)>(&typeid(TObject), 2, [readFunction](TObject const& object, const std::string& name) {
+			return readFunction(object, name);
+		});
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMemberImpl(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(readFunction);
-		mDefaultSetter[&typeid(TObject)] = [writeFunction](void* object, const std::string& name, LuaContext& ctxt) {
-			writeFunction(*static_cast<TObject*>(object), name, Reader<typename std::decay<TVarType>::type>::readSafe(ctxt, -1));
-		};
+		setTable<LUA_REGISTRYINDEX,void (TObject&, std::string, TVarType)>(&typeid(TObject), 5, [writeFunction](TObject& object, const std::string& name, const TVarType& value) {
+			writeFunction(object, name, value);
+		});
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
-	void registerMemberImpl(tag<TVarType (TObject::*)>, boost::optional<TReadFunction> readFunction, boost::optional<TWriteFunction> writeFunction)
+	void registerMemberImpl(tag<TVarType (TObject::*)>, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(std::move(readFunction), std::move(writeFunction));
 	}
@@ -862,6 +889,22 @@ private:
 		}
 
 		// calling pcall automatically pops the parameters and pushes output
+		callRaw(inArguments, outArguments);
+
+		// pcall succeeded, we pop the returned values and return them
+		try {
+			return readTopAndPop<TReturnType>(outArguments);
+
+		} catch(...) {
+			lua_pop(mState, outArguments);
+			throw;
+		}
+	}
+	
+	// this function just calls lua_pcall and checks for errors
+	void callRaw(const int inArguments, const int outArguments) const
+	{
+		// calling pcall automatically pops the parameters and pushes output
 		const auto pcallReturnValue = lua_pcall(mState, inArguments, outArguments, 0);
 
 		// if pcall failed, analyzing the problem and throwing
@@ -886,15 +929,6 @@ private:
 					}
 				}
 			}
-		}
-
-		// pcall succeeded, we pop the returned values and return them
-		try {
-			return readTopAndPop<TReturnType>(outArguments);
-
-		} catch(...) {
-			lua_pop(mState, outArguments);
-			throw;
 		}
 	}
 
@@ -926,35 +960,51 @@ private:
 				lua_gettable(lua, LUA_REGISTRYINDEX);
 				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
 				lua_pop(lua, 1);
-				
-				assert(lua_gettop(lua) == 2);
-				assert(lua_isuserdata(lua, 1));
-				assert(lua_isstring(lua, 2));
-				const auto memberName = lua_tostring(lua, 2);
 
-				// looking for a function in getters list
 				try {
-					const auto iter1 = me->mRegisteredGetters.find(&typeid(TType));
-					if (iter1 != me->mRegisteredGetters.end()) {
-						const auto iter2 = iter1->second.find(memberName);
-						if (iter2 != iter1->second.end()) {
-							const auto& function = iter2->second;
-							return function(lua_touserdata(lua, 1), *me);
-						}
-					}
+					assert(lua_gettop(lua) == 2);
+					assert(lua_isuserdata(lua, 1));
 
-					const auto iter2 = me->mDefaultGetter.find(&typeid(TType));
-					if (iter2 != me->mDefaultGetter.end()) {
-						return iter2->second(lua_touserdata(lua, 1), memberName, *me);
+					// searching for a handler
+					lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(TType)));
+					lua_gettable(lua, LUA_REGISTRYINDEX);
+					assert(!lua_isnil(lua, -1));
+					
+					// looking into getter functions
+					lua_pushinteger(lua, 0);
+					lua_gettable(lua, -2);
+					lua_pushvalue(lua, 2);
+					lua_gettable(lua, -2);
+					if (!lua_isnil(lua, -1))
+						return 1;
+					lua_pop(lua, 2);
+					
+					// looking into getter members
+					lua_pushinteger(lua, 1);
+					lua_gettable(lua, -2);
+					lua_pushvalue(lua, 2);
+					lua_gettable(lua, -2);
+					if (!lua_isnil(lua, -1)) {
+						lua_pushvalue(lua, 1);
+						me->callRaw(1, 1);
+						return 1;
 					}
+					lua_pop(lua, 2);
 
-					lua_pushnil(me->mState);
+					// looking into default getter
+					lua_pushinteger(lua, 2);
+					lua_gettable(lua, -2);
+					if (lua_isnil(lua, -1))
+						return 1;
+					lua_pushvalue(lua, 1);
+					lua_pushvalue(lua, 2);
+					me->callRaw(2, 1);
 					return 1;
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());
 					lua_error(lua);
-					throw "Dummy exception";		// lua_error never returns, and we write this to avoid a compiler warning
+					throw "Dummy exception";
 				}
 			};
 
@@ -965,32 +1015,57 @@ private:
 				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
 				lua_pop(lua, 1);
 
-				assert(lua_gettop(lua) == 3);
-				assert(lua_isuserdata(lua, 1));
-				assert(lua_isstring(lua, 2));
-				const auto memberName = lua_tostring(lua, 2);
-
-				// looking for a function in getters list
 				try {
-					const auto iter1 = me->mRegisteredSetters.find(&typeid(TType));
-					if (iter1 != me->mRegisteredSetters.end()) {
-						const auto iter2 = iter1->second.find(memberName);
-						if (iter2 != iter1->second.end()) {
-							const auto& function = iter2->second;
-							function(lua_touserdata(lua, 1), *me);
-							return 0;
-						}
-					}
+					assert(lua_gettop(lua) == 3);
+					assert(lua_isuserdata(lua, 1));
 
-					me->mDefaultSetter.at(&typeid(TType))(lua_touserdata(lua, 1), memberName, *me);
-					return 0;
-				
+					// searching for a handler
+					lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(TType)));
+					lua_gettable(lua, LUA_REGISTRYINDEX);
+					assert(!lua_isnil(lua, -1));
+					
+					// looking into setter functions
+					lua_pushinteger(lua, 3);
+					lua_gettable(lua, -2);
+					lua_pushvalue(lua, 2);
+					lua_gettable(lua, -2);
+					if (!lua_isnil(lua, -1))
+						return 1;
+					lua_pop(lua, 2);
+					
+					// looking into setter members
+					lua_pushinteger(lua, 4);
+					lua_gettable(lua, -2);
+					lua_pushvalue(lua, 2);
+					lua_gettable(lua, -2);
+					if (!lua_isnil(lua, -1)) {
+						lua_pushvalue(lua, 1);
+						lua_pushvalue(lua, 3);
+						me->callRaw(2, 1);
+						return 1;
+					}
+					lua_pop(lua, 2);
+
+					// looking into default setter
+					lua_pushinteger(lua, 5);
+					lua_gettable(lua, -2);
+					if (lua_isnil(lua, -1))
+						return 1;
+					lua_pushvalue(lua, 1);
+					lua_pushvalue(lua, 2);
+					lua_pushvalue(lua, 3);
+					me->callRaw(3, 1);
+					return 1;
+
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());
 					lua_error(lua);
 					throw "Dummy exception";
 				}
 			};
+
+			// checking object type
+			context.checkTypeRegistration(&typeid(TType));
 
 			// creating the object
 			// lua_newuserdata allocates memory in the internals of the lua library and returns it so we can fill it
@@ -1355,6 +1430,17 @@ struct LuaContext::Pusher<LuaEmptyArray_t> {
 	static const int maxSize = 1;
 	static int push(const LuaContext& context, LuaEmptyArray_t) {
 		lua_newtable(context.mState);
+		return 1;
+	}
+};
+
+// std::type_info* is a lightuserdata
+template<>
+struct LuaContext::Pusher<const std::type_info*> {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+	static int push(const LuaContext& context, const std::type_info* ptr) {
+		lua_pushlightuserdata(context.mState, const_cast<std::type_info*>(ptr));
 		return 1;
 	}
 };
