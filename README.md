@@ -42,10 +42,10 @@ All the files outside of the `include` directory are only for testing purposes a
 * a lot of features have been added: lua arrays, polymorphic functions, etc.
 * the implementation is really a lot cleaner, and probably faster and with less bugs
 
-### Examples
-All the examples are in C++, except of course the parameter passed to `executeCode`.
+### Documentation
+All the examples below are in C++, except of course the parameter passed to `executeCode`.
 
-#### Example 1: reading and writing variables
+#### Reading and writing variables
 
     LuaContext lua;
     lua.writeVariable("x", 5);
@@ -59,7 +59,7 @@ All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::strin
 An exception is thrown if you try to read a value of the wrong type or if you try to read a non-existing variable.
 If you don't want to have exceptions or if you don't know the type of a variable in advance, you can read a `boost::optional` and/or a `boost::variant`. More informations below.
 
-#### Example 2: giving functions to lua
+#### Writing functions
 
     void show(int value) {
         std::cout << value << std::endl;
@@ -88,7 +88,7 @@ If you pass a function object with a single operator(), you can also auto-detect
     lua.writeFunction("show", [](int v) { std::cout << v << std::endl; });
 
 
-#### Example 3: writing custom types
+#### Writing custom types
 
     class Object {
     public:
@@ -109,19 +109,22 @@ If you pass a function object with a single operator(), you can also auto-detect
 
 Prints `incrementing` and `11`.
 
-In addition to basic types and functions, you can pass any object to `writeVariable`. The object will then be copied into lua.
-Before doing so, you can call "registerFunction" so lua scripts can call the object's functions just like in the example above.
+In addition to basic types and functions, you can pass any object to `writeVariable`.
+The object will then be copied into Lua by calling its copy constructor.
 
-`readVariable` can be used to read a copy of the object.
+If you want to call an object's member function, you must register it with `registerFunction`, just like in the example above.
+It doesn't matter whether you call `registerFunction` before or after writing the objects, it works in both cases.
+
+`readVariable` can also be used to read a copy of the object.
 
 If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported.
-Function that have been registered for a type also work with all pointers to this type.
+Functions that have been registered for a type also work with all pointers to this type.
 
-However, inheritance is not supported.
+Note however that inheritance is not supported.
 You need to register all of a type's functions, even if you have already registered a type's parent's functions.
 
 
-#### Example 4: reading lua code from a file
+#### Reading lua code from a file
 
     LuaContext lua;
     lua.executeCode(std::ifstream{"script.lua"});
@@ -132,7 +135,7 @@ If you write your own derivate of std::istream (for example a decompressor), you
 Note however that `executeCode` will block until it reaches eof. You should take care if you use a custom derivate of std::istream which awaits for data.
 
 
-#### Example 5: executing lua functions
+#### Executing lua functions
 
     LuaContext lua;
 
@@ -150,7 +153,7 @@ The only types that are supported by `writeVariable` but not by `readVariable` a
 **Warning**: calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash).
 
 
-#### Example 6: polymorphic functions
+#### Polymorphic functions
 
 If you want to read a value but don't know in advance whether it is of type A or type B, `writeVariable` and `readVariable` also support `boost::variant`.
 
@@ -175,7 +178,7 @@ Prints `Value is a string: hello` and `Value is a bool: true`.
 See the documentation of [`boost::variant`](http://www.boost.org/doc/libs/release/doc/html/variant.html).
 
 
-#### Example 7: handling lua arrays
+#### Handling lua arrays
 
 `writeVariable` and `readVariable` support `std::vector` of `std::pair`s, `std::map` and `std::unordered_map`.
 This allows you to read and write arrays. Combined with `boost::variant`, this allows you to write real polymorphic arrays.
@@ -228,7 +231,7 @@ Remember that you can create recursive variants, so you can read arrays which co
 
 This `AnyValue` can store any lua value, except functions and custom objects.
 
-#### Example 8: returning multiple values
+#### Returning multiple values
 
     LuaContext lua;
     lua.writeFunction("f1", [](int a, int b, int c) { return std::make_tuple(a + b + c, "test"); });
@@ -243,7 +246,7 @@ Prints `6` and `test`.
 Lua supports functions that return multiple values at once. A C++ function can do so by returning a tuple.
 In this example we return at the same time an int and a string.
 
-#### Example 9: destroying a lua variable
+#### Destroying a lua variable
 
     LuaContext lua;
     
@@ -254,7 +257,7 @@ In this example we return at the same time an int and a string.
 The C++ equivalent for `nil` is `nullptr`.
 
 
-#### Example 10: custom member functions
+#### Custom member functions
 
 In example 3, we saw that you can register functions for a given type with `registerFunction`.
 
@@ -278,7 +281,7 @@ There is an alternative syntax if you want to register a function for a pointer 
     lua.registerFunction<Foo, void (int)>("add", [](Foo& object, int num) { object.value += num; });
 
 
-#### Example 11: member objects and custom member objects
+#### Member objects and custom member objects
 
 You can also register member variables for objects.
 
@@ -332,6 +335,20 @@ The syntax is the same than above, except that you don't pass the name of the va
                 object.value = boost::get<int>(value);
         }
     );
+
+
+#### Exception safety
+
+You can safely throw exceptions from inside functions called by Lua.
+They are considered as errors by Lua, and if not handled they will be propagated outside.
+
+    lua.writeFunction("test", []() { throw std::runtime_error("Problem"); });
+    
+    try {
+        lua.executeCode("test()");
+    } catch(const std::runtime_error& e) {
+        std::cout << e.what() << std::endl;     // prints "Problem"
+    }
 
 
 ### Compilation
