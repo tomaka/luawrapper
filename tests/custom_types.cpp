@@ -149,3 +149,20 @@ TEST(CustomTypes, Unregistering) {
 	context.unregisterFunction<Object>("foo");
 	EXPECT_ANY_THROW(context.executeCode("return obj:foo()"));
 }
+
+TEST(CustomTypes, GenericMembers) {
+	struct Object {
+		int value = 5;
+	};
+    
+    LuaContext context;
+	context.registerMember<int (Object::*)>(
+		[](const Object& obj, const std::string& name) { return obj.value; },
+		[](Object& obj, const std::string& name, int val) { obj.value = val; }
+	);
+    
+    context.writeVariable("obj", Object{});
+    EXPECT_EQ(5, context.executeCode<int>("return obj.foo"));
+	context.executeCode("obj.bar = 18");
+    EXPECT_EQ(18, context.executeCode<int>("return obj.bowl"));
+}
