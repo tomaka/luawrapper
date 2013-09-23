@@ -684,6 +684,7 @@ private:
 			lua_pop(mState, 1);
 			return;
 		}
+		lua_pop(mState, 1);
 
 		lua_pushlightuserdata(mState, const_cast<std::type_info*>(type));
 		lua_newtable(mState);
