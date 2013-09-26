@@ -534,8 +534,6 @@ public:
 	template<typename TFunctionType, typename... TData>
 	void writeFunction(TData&&... data) {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
-		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
-			RealDataType;
 		
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
