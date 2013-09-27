@@ -1578,7 +1578,8 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	static auto push(const LuaContext& context, TFunctionObject fn)
 		-> typename std::enable_if<!std::is_trivially_destructible<TFunctionObject>::value, int>::type
 	{
-		static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
+		// TODO: is_move_constructible not supported by old versions
+		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
 
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
 		// if we used lua's cfunctions system, we could not detect when the function is no longer in use, which could cause problems
@@ -1635,7 +1636,8 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	static auto push(const LuaContext& context, TFunctionObject fn)
 		-> typename std::enable_if<std::is_trivially_destructible<TFunctionObject>::value, int>::type
 	{
-		static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
+		// TODO: is_move_constructible not supported by old versions
+		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
 
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
 		// since "fn" doesn't need to be destroyed, we simply push it on the stack
