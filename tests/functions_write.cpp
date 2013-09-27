@@ -146,3 +146,18 @@ TEST(FunctionsWrite, PolymorphicFunctions) {
 	EXPECT_EQ("bool", context.executeCode<std::string>("return f(true)"));
 	EXPECT_EQ("string", context.executeCode<std::string>("return f('test')"));
 }
+
+TEST(FunctionsWrite, VariadicFunctions) {
+	LuaContext context;
+
+	context.writeFunction("f",
+		[](int a, boost::optional<int> b, boost::optional<double> c) -> int {
+			return c.is_initialized() ? 3 : (b.is_initialized() ? 2 : 1);
+		}
+	);
+	
+	EXPECT_EQ(1, context.executeCode<int>("return f(12)"));
+	EXPECT_EQ(2, context.executeCode<int>("return f(12, 24)"));
+	EXPECT_EQ(3, context.executeCode<int>("return f(12, 24, \"hello\")"));
+	EXPECT_EQ(3, context.executeCode<int>("return f(12, 24, 3.5)"));
+}

@@ -1275,6 +1275,14 @@ private:
 	// this structure takes any object and detects its function type
 	template<typename TObjectType>
 	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
+
+	// this structure takes a function type and has the "min" and the "max" static const member variables, whose value equal to the min and max number of parameters of the function
+	template<typename TFunctionType, typename = void>
+	struct FunctionArgumentsCounter { static_assert(std::is_function<TFunctionType>::value, "TFunctionType must be a function"); };
+
+	// 
+	template<typename T>
+	struct IsOptional : public std::false_type {};
 };
 
 static struct LuaEmptyArray_t {}
@@ -1342,6 +1350,28 @@ struct LuaContext::PusherMaxSize<TFirst, TTypes...> { static const int size = Pu
 template<>
 struct LuaContext::PusherMaxSize<> { static const int size = 0; };
 
+// implementation of FunctionArgumentsCounter
+template<typename TRetValue, typename TLast, typename... TParams>
+struct LuaContext::FunctionArgumentsCounter<TRetValue (boost::optional<TLast>, TParams...)> {
+	typedef FunctionArgumentsCounter<TRetValue (TParams...)>
+		SubType;
+	static const int min = SubType::min == 0 ? 0 : SubType::min;
+	static const int max = 1 + SubType::max;
+};
+template<typename TRetValue, typename TLast, typename... TParams>
+struct LuaContext::FunctionArgumentsCounter<TRetValue (TLast, TParams...), typename std::enable_if<!LuaContext::IsOptional<TLast>::value>::type> {
+	static const int min = 1 + LuaContext::FunctionArgumentsCounter<TRetValue (TParams...)>::min;
+	static const int max = 1 + LuaContext::FunctionArgumentsCounter<TRetValue (TParams...)>::max;
+};
+template<typename TRetValue>
+struct LuaContext::FunctionArgumentsCounter<TRetValue ()> {
+	static const int min = 0;
+	static const int max = 0;
+};
+
+// implementation of IsOptional
+template<typename T>
+struct LuaContext::IsOptional<boost::optional<T>> : public std::true_type {};
 
 
 /**************************************************/
