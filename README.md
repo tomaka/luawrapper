@@ -80,7 +80,9 @@ Prints `5` and `7`.
 Prints `3` and `8`.
 
 `writeVariable` supports both `std::function` and native function pointers or references.
+
 The function's parameters and return type are handled as if they were read and written by `readVariable` and `writeVariable`.
+If there are not enough parameters or if parameters are of the wrong type, then a Lua error is triggered.
 
 If you pass a function object with a single operator(), you can also auto-detect the function type using `writeFunction`:
 

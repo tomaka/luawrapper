@@ -18,6 +18,7 @@ TEST(FunctionsWrite, NativeFunctions) {
 	EXPECT_EQ(3, context.executeCode<int>("return f(2)"));
 	EXPECT_EQ(13, context.executeCode<int>("return g(12)"));
 	EXPECT_EQ(9, context.executeCode<int>("return h(8)"));
+	EXPECT_THROW(context.executeCode<int>("return f(true)"), LuaContext::ExecutionErrorException);
 }
 
 TEST(FunctionsWrite, FunctionObjects) {
@@ -158,7 +159,7 @@ TEST(FunctionsWrite, VariadicFunctions) {
 	
 	EXPECT_EQ(1, context.executeCode<int>("return f(12)"));
 	EXPECT_EQ(2, context.executeCode<int>("return f(12, 24)"));
-	EXPECT_THROW(context.executeCode<int>("return f(12, 24, \"hello\")"), LuaContext::WrongTypeException);
+	EXPECT_THROW(context.executeCode<int>("return f(12, 24, \"hello\")"), LuaContext::ExecutionErrorException);
 	EXPECT_EQ(3, context.executeCode<int>("return f(12, 24, 3.5)"));
 	
 	context.writeFunction("g", [](boost::optional<int> a, boost::optional<int> b, int c) -> int { return 3; });

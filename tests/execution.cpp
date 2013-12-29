@@ -12,7 +12,7 @@ TEST(Execution, Errors) {
 	EXPECT_THROW(context.executeCode("qsdfqsdf"), LuaContext::SyntaxErrorException);
 
 	context.writeFunction("f", [](bool) {});
-	EXPECT_ANY_THROW(context.executeCode("f('hello')"));
+	EXPECT_THROW(context.executeCode("f('hello')"), LuaContext::ExecutionErrorException);
 }
 
 TEST(Execution, ReturningValues) {

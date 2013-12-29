@@ -1721,11 +1721,26 @@ private:
 			return lua_error(state);
 		}
 
+		std::unique_ptr<std::tuple<TParameters...>> parameters;
 		// reading parameters from the stack
-		auto parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount, argumentsCount);
+		try {
+			parameters.reset(new std::tuple<TParameters...>(Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount, argumentsCount)));
 
+		} catch (const WrongTypeException& ex) {
+			// wrong parameter type, using lua_error to return an error
+			luaL_where(state, 1);
+			lua_pushstring(state, "Unable to convert parameter from ");
+			lua_pushstring(state, ex.luaType.c_str());
+			lua_pushstring(state, " to ");
+			lua_pushstring(state, ex.destination.name());
+			lua_concat(state, 4);
+
+			// lua_error throws an exception when compiling as C++
+			return lua_error(state);
+		}
+		
 		// calling the function, note that "result" should be a tuple
-		auto result = me->callWithTuple<TReturnType>(*toCall, parameters);
+		auto result = me->callWithTuple<TReturnType>(*toCall, *parameters);
 
 		// pushing the result on the stack and returning number of pushed elements
 		return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
