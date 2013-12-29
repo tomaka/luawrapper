@@ -89,6 +89,16 @@ If you pass a function object with a single operator(), you can also auto-detect
     LuaContext lua;
     lua.writeFunction("show", [](int v) { std::cout << v << std::endl; });
 
+`writeFunction` also accepts an explicit template argument if the type is ambiguous:
+
+    // note: this is C++14
+    const auto increment = [](auto v) { return v + 1; };
+    
+    LuaContext lua;
+    lua.writeFunction<int (int)>("incrementInt", increment);
+    lua.writeFunction<double (double)>("incrementDouble", increment);
+    
+Using `writeFunction` is both easier and faster than `writeVariable` in case of function objects, and you should prefer this method.
 
 #### Writing custom types
 
@@ -119,11 +129,10 @@ It doesn't matter whether you call `registerFunction` before or after writing th
 
 `readVariable` can also be used to read a copy of the object.
 
-If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported.
-Functions that have been registered for a type also work with all pointers to this type.
+If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported. Functions that have been registered for a type also work with these.
 
 Note however that inheritance is not supported.
-You need to register all of a type's functions, even if you have already registered a type's parent's functions.
+You need to register all of a type's functions, even if you have already registered the functions of its parents.
 
 
 #### Reading lua code from a file
@@ -133,8 +142,8 @@ You need to register all of a type's functions, even if you have already registe
 
 This simple example shows that you can easily read lua code (including pre-compiled) from a file.
 
-If you write your own derivate of std::istream (for example a decompressor), you can of course also use it.
-Note however that `executeCode` will block until it reaches eof. You should take care if you use a custom derivate of std::istream which awaits for data.
+If you write your own derivate of `std::istream` (for example a decompressor), you can of course also use it.
+Note however that `executeCode` will block until it reaches eof. You should remember this if you use a custom derivate of `std::istream` which awaits for data.
 
 
 #### Executing lua functions
@@ -149,10 +158,9 @@ Note however that `executeCode` will block until it reaches eof. You should take
 Prints `5`.
 
 `readVariable` also supports `std::function`. This allows you to read any function, even the functions created by lua.
+Note however that calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash), even when the function was originally a C++ function.
 
 The only types that are supported by `writeVariable` but not by `readVariable` are native function pointers and `unique_ptr`s, for obvious reasons.
-
-**Warning**: calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash).
 
 
 #### Polymorphic functions
@@ -213,7 +221,7 @@ This means that for example:
 
     lua.executeCode("foo(7, 7)");
 
-This code will trigger an `ExecutionErrorException` because the `foo` function requires at least two parameters.
+This code will trigger a Lua error because the `foo` function requires at least two parameters.
 
 
 #### Handling lua arrays
@@ -250,6 +258,8 @@ You can also write an empty array, like this:
 
     LuaContext lua;
     lua.writeVariable("a", LuaEmptyArray);
+    
+`LuaEmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array (note: the reason why it is not a member of `LuaContext` is because of programming issues).
 
 Remember that you can create recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
 
