@@ -54,7 +54,7 @@ All the examples below are in C++, except of course the parameter passed to `exe
 
 Prints `7`.
 
-All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::string`, can be read or written.
+All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::string`, can be read or written. `Enum`s can also be read or written but are converted into a number.
 
 An exception is thrown if you try to read a value of the wrong type or if you try to read a non-existing variable.
 If you don't want to have exceptions or if you don't know the type of a variable in advance, you can read a `boost::optional` and/or a `boost::variant`. More informations below.
