@@ -141,7 +141,7 @@ public:
 	{
 	public:
 		ExecutionErrorException(const std::string& msg) :
-			std::runtime_error(msg.c_str())
+			std::runtime_error(msg)
 		{
 		}
 	};
@@ -153,7 +153,7 @@ public:
 	{
 	public:
 		SyntaxErrorException(const std::string& msg) :
-			std::runtime_error(msg.c_str())
+			std::runtime_error(msg)
 		{
 		}
 	};
