@@ -178,6 +178,42 @@ Prints `Value is a string: hello` and `Value is a bool: true`.
 See the documentation of [`boost::variant`](http://www.boost.org/doc/libs/release/doc/html/variant.html).
 
 
+#### Variadic-like functions
+
+If you want functions that take a varying number of parameters, you can have some parameters as `boost::optional`s.
+
+    LuaContext lua;
+
+    lua.writeFunction("foo", 
+        [](int param1, boost::optional<int> param2, boost::optional<int> param3)
+        {
+            if (param3) {
+                std::cout << "3 parameters" << std::endl;
+            } else if (param2) {
+                std::cout << "2 parameters" << std::endl;
+            } else {
+                std::cout << "1 parameter" << std::endl;
+            }
+        }
+    );
+
+    lua.executeCode("foo(7)");
+    lua.executeCode("foo(7, 7)");
+    lua.executeCode("foo(7, 7, 7)");
+
+Just like C/C++ functions with default parameter values, you have to put the `boost::optional`s at the end of the parameters list.
+
+This means that for example:
+
+    lua.writeFunction("foo", 
+        [](boost::optional<int> param1, int param2) {}
+    );
+
+    lua.executeCode("foo(7, 7)");
+
+This code will trigger an `ExecutionErrorException` because the `foo` function requires at least two parameters.
+
+
 #### Handling lua arrays
 
 `writeVariable` and `readVariable` support `std::vector` of `std::pair`s, `std::map` and `std::unordered_map`.
