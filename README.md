@@ -369,12 +369,12 @@ The third parameter is a function or function object that is called in order to 
     std::cout << lua.executeCode<int>("return a.value_plus_one");    // 9
     
     lua.writeVariable("b", Foo{1});
-    lua.executeCode("b.higher_than_five = 5");
+    lua.executeCode("b.value_plus_one = 5");
     std::cout << lua.readVariable<Object>("b").value;               // 4
 
 The alternative syntax also exists.
 
-    lua.registerMember<Foo, bool>("higher_than_five", ...same as above...);
+    lua.registerMember<Foo, bool>("value_plus_one", ...same as above...);
 
 Finally you can register functions that will be called by default when a non-existing variable is read or written.
 The syntax is the same than above, except that the callbacks take an extra `name` parameter.
