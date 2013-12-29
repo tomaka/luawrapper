@@ -127,9 +127,9 @@ The object will then be copied into Lua by calling its copy constructor.
 If you want to call an object's member function, you must register it with `registerFunction`, just like in the example above.
 It doesn't matter whether you call `registerFunction` before or after writing the objects, it works in both cases.
 
-`readVariable` can also be used to read a copy of the object.
+If you pass a plain object type as template parameter to `readVariable` (for example `readVariable<Object>`, juste like in the code above), then it will read a copy of the object. However if you pass a reference (for example `readVariable<Object&>`), then a reference to the object held by Lua will be returned.
 
-If you don't want to manipulate copies, you should write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported. Functions that have been registered for a type also work with these.
+You also have the possibility to write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported. Functions that have been registered for a type also work with these.
 
 Note however that inheritance is not supported.
 You need to register all of a type's functions, even if you have already registered the functions of its parents.

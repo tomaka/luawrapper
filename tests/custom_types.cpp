@@ -11,6 +11,17 @@ TEST(CustomTypes, ReadWrite) {
 	EXPECT_EQ(5, context.readVariable<Object>("obj").value);
 }
 
+TEST(CustomTypes, ReadReference) {
+	struct Object {
+		int value;
+    };
+    
+    LuaContext context;
+    context.writeVariable("obj", Object{5});
+	context.readVariable<Object&>("obj").value = 12;	
+	EXPECT_EQ(12, context.readVariable<Object>("obj").value);
+}
+
 TEST(CustomTypes, MemberFunctions) {
 	struct Object {
 		void  increment() { ++value; } 
@@ -165,4 +176,36 @@ TEST(CustomTypes, GenericMembers) {
     EXPECT_EQ(5, context.executeCode<int>("return obj.foo"));
 	context.executeCode("obj.bar = 18");
     EXPECT_EQ(18, context.executeCode<int>("return obj.bowl"));
+}
+
+TEST(CustomTypes, CopiesCheck) {
+	int copiesCount = 0;
+	int movesCount = 0;
+
+	struct Foo {
+		Foo(int* copiesCount, int* movesCount) : copiesCount(copiesCount), movesCount(movesCount) {}
+		Foo(const Foo& f) : copiesCount(f.copiesCount), movesCount(f.movesCount) { ++*copiesCount; }
+		Foo(Foo&& f) : copiesCount(f.copiesCount), movesCount(f.movesCount) { ++*movesCount; }
+
+		int* copiesCount;
+		int* movesCount;
+	};
+
+
+	LuaContext context;
+	context.writeVariable("obj", Foo{&copiesCount, &movesCount});
+    EXPECT_EQ(0, copiesCount);
+    EXPECT_EQ(1, movesCount);
+
+	context.readVariable<Foo>("obj");
+    EXPECT_EQ(1, copiesCount);
+    EXPECT_EQ(1, movesCount);
+	
+	context.executeCode("a = obj");
+    EXPECT_EQ(1, copiesCount);
+    EXPECT_EQ(1, movesCount);
+
+	context.readVariable<Foo&>("obj");
+    EXPECT_EQ(1, copiesCount);
+    EXPECT_EQ(1, movesCount);
 }
