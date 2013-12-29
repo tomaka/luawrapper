@@ -379,7 +379,7 @@ The alternative syntax also exists.
 Finally you can register functions that will be called by default when a non-existing variable is read or written.
 The syntax is the same than above, except that the callbacks take an extra `name` parameter.
     
-    lua.registerMember<boost::variant<int,bool> (Foo::*)>(
+    lua.registerMember<int (Foo::*)>(
         [](Foo& object, const std::string& memberName) -> int {
             std::cout << "Trying to read member " << memberName << " of object" << std::endl;
             return 1;
