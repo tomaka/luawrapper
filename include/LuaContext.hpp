@@ -50,17 +50,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <boost/mpl/distance.hpp>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
+#include <boost/type_traits.hpp>
 #include <lua.hpp>
 
 #ifdef _MSC_VER
 #	include "misc/exception.hpp"
-#endif
-
-#if (defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 4 && __GNUC_MINOR__ <= 7) || (defined(__clang__) && __clang_major__ <= 3 && __clang_minor__ <= 2)
-namespace std {
-	template<typename T>
-	using is_trivially_destructible = has_trivial_destructor<T>;
-}
 #endif
 
 /**
@@ -1089,7 +1083,7 @@ private:
 				lua_newtable(context.mState);
 				try {
 					// using the garbage collecting function we created above
-					if (!std::is_trivially_destructible<TType>::value)
+					if (!boost::has_trivial_destructor<TType>::value)
 					{
 						lua_pushstring(context.mState, "__gc");
 						lua_pushcfunction(context.mState, garbageCallbackFunction);
@@ -1581,18 +1575,22 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 };
 
 // enum
-#if !defined(__clang__) || __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 2)
 template<typename TEnum>
 struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
-	typedef typename std::underlying_type<TEnum>::type
-		RealType;
+	#if !defined(__clang__) || __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 3)
+		typedef typename std::underlying_type<TEnum>::type
+			RealType;
+	#else
+		typedef unsigned long
+			RealType;
+	#endif
+
 	static const int minSize = Pusher<RealType>::minSize;
 	static const int maxSize = Pusher<RealType>::maxSize;
 	static int push(const LuaContext& context, TEnum value) {
 		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
-#endif
 
 // any function
 template<typename TReturnType, typename... TParameters>
@@ -1607,7 +1605,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	// this is the version for non-trivially destructible objects
 	template<typename TFunctionObject>
 	static auto push(const LuaContext& context, TFunctionObject fn)
-		-> typename std::enable_if<!std::is_trivially_destructible<TFunctionObject>::value, int>::type
+		-> typename std::enable_if<!boost::has_trivial_destructor<TFunctionObject>::value, int>::type
 	{
 		// TODO: is_move_constructible not supported by old versions
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
@@ -1665,7 +1663,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	// this is the version for trivially destructible objects
 	template<typename TFunctionObject>
 	static auto push(const LuaContext& context, TFunctionObject fn)
-		-> typename std::enable_if<std::is_trivially_destructible<TFunctionObject>::value, int>::type
+		-> typename std::enable_if<boost::has_trivial_destructor<TFunctionObject>::value, int>::type
 	{
 		// TODO: is_move_constructible not supported by old versions
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
@@ -1879,7 +1877,7 @@ struct LuaContext::Reader<std::nullptr_t>
 	{
 		if (!test(context, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::nullptr_t)};
-		return read(context, index);
+		return nullptr;
 	}
 };
 
@@ -1904,17 +1902,21 @@ struct LuaContext::Reader<
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<TType>
 	{
-		if (!test(context, index))
+		if (!lua_isnumber(context.mState, index))
 			return {};
-		return read(context, index);
+		const auto nb = lua_tonumber(context.mState, index);
+		if (fmod(nb, 1.f) != 0)
+			return {};
+		return static_cast<TType>(nb);
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> TType
 	{
-		if (!test(context, index))
+		const auto val = testRead(context, index);
+		if (!val)
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
-		return read(context, index);
+		return val.get();
 	}
 };
 
@@ -2015,6 +2017,41 @@ struct LuaContext::Reader<std::string>
 	{
 		if (!test(context, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::string)};
+		return read(context, index);
+	}
+};
+
+// enums
+template<typename TType>
+struct LuaContext::Reader<
+			TType,
+			typename std::enable_if<std::is_enum<TType>::value>::type
+		>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnumber(context.mState, index) != 0 && fmod(lua_tonumber(context.mState, index), 1.) == 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> TType
+	{
+		return static_cast<TType>(lua_tointeger(context.mState, index));
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> TType
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
 		return read(context, index);
 	}
 };

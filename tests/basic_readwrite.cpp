@@ -41,6 +41,22 @@ TEST(BasicReadWrite, Strings) {
 	EXPECT_EQ("world", context.readVariable<std::string>("b"));
 }
 
+TEST(BasicReadWrite, Enums) {
+	enum class Foo {
+		A,
+		B,
+		C
+	};
+
+	LuaContext context;
+
+	context.writeVariable("a", Foo::A);
+	EXPECT_EQ(Foo::A, context.readVariable<Foo>("a"));
+	
+	context.writeVariable("b", Foo::B);
+	EXPECT_EQ(Foo::B, context.readVariable<Foo>("b"));
+}
+
 TEST(BasicReadWrite, Conversions) {
 	LuaContext context;
 
