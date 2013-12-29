@@ -1836,7 +1836,7 @@ struct LuaContext::Reader<std::nullptr_t>
 	{
 		if (!test(context, index))
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::nullptr_t)};
-		return read(context, index);
+		return nullptr;
 	}
 };
 
@@ -1861,17 +1861,21 @@ struct LuaContext::Reader<
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<TType>
 	{
-		if (!test(context, index))
+		if (!lua_isnumber(context.mState, index))
 			return {};
-		return read(context, index);
+		const auto nb = lua_tonumber(context.mState, index);
+		if (fmod(nb, 1.f) != 0)
+			return {};
+		return static_cast<TType>(nb);
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> TType
 	{
-		if (!test(context, index))
+		const auto val = testRead(context, index);
+		if (!val)
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
-		return read(context, index);
+		return val.get();
 	}
 };
 
