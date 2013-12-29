@@ -1823,7 +1823,7 @@ struct LuaContext::Pusher<boost::optional<TType>> {
 // tuple
 template<typename... TTypes>
 struct LuaContext::Pusher<std::tuple<TTypes...>> {
-	static const int minSize = PusherTotalMaxSize<TTypes...>::size;
+	static const int minSize = PusherTotalMinSize<TTypes...>::size;
 	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
 	static int push(const LuaContext& context, const std::tuple<TTypes...>& value) {
