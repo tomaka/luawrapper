@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #	include "misc/exception.hpp"
 #endif
 
-#if (defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 4 && __GNUC_MINOR__ <= 7) || (defined(__clang__) && __clang_major__ <= 3 && __clang_minor__ <= 2)
+#if (defined(__GNUC__) && !defined(__clang__) && __GNUC__ <= 4 && __GNUC_MINOR__ <= 7) || (defined(__clang__) && __clang_major__ <= 3 && __clang_minor__ <= 3)
 namespace std {
 	template<typename T>
 	using is_trivially_destructible = has_trivial_destructor<T>;
