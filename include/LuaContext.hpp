@@ -1724,7 +1724,7 @@ private:
 		}
 
 		// reading parameters from the stack
-		auto parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount);
+		auto parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount, argumentsCount);
 
 		// calling the function, note that "result" should be a tuple
 		auto result = me->callWithTuple<TReturnType>(*toCall, parameters);
@@ -2399,27 +2399,29 @@ public:
 };
 
 // reading a tuple
+// tuple have an additional argument for their functions, that is the maximum size to read
+// if maxSize is smaller than the tuple size, then the remaining parameters will be left to default value
 template<>
 struct LuaContext::Reader<std::tuple<>>
 {
-	static bool test(const LuaContext& context, int index)
+	static bool test(const LuaContext& context, int index, int maxSize = 0)
 	{
 		return true;
 	}
 	
-	static auto read(const LuaContext& context, int index)
+	static auto read(const LuaContext& context, int index, int maxSize = 0)
 		-> std::tuple<>
 	{
 		return {};
 	}
 
-	static auto testRead(const LuaContext& context, int index)
+	static auto testRead(const LuaContext& context, int index, int maxSize = 0)
 		-> boost::optional<std::tuple<>>
 	{
 		return std::tuple<>{};
 	}
 
-	static auto readSafe(const LuaContext& context, int index)
+	static auto readSafe(const LuaContext& context, int index, int maxSize = 0)
 		-> std::tuple<>
 	{
 		return {};
@@ -2427,25 +2429,35 @@ struct LuaContext::Reader<std::tuple<>>
 };
 
 template<typename TFirst, typename... TOthers>
-struct LuaContext::Reader<std::tuple<TFirst, TOthers...>>
+struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
+		typename std::enable_if<!std::is_default_constructible<TFirst>::value>::type
+	>
 {
+	// this is the "TFirst is NOT default constructible" version
+
+	typedef std::tuple<TFirst, TOthers...>
+		Tuple;
 	typedef Reader<typename std::decay<TFirst>::type>
 		TFirstReader;
 	typedef Reader<std::tuple<TOthers...>>
 		TOthersReader;
 
-	static bool test(const LuaContext& context, int index)
+	static bool test(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
 	{
-		return TFirstReader::test(context, index) && TOthersReader::test(context, index + 1);
+		if (maxSize <= 0)
+			return false;
+		return TFirstReader::test(context, index) && TOthersReader::test(context, index + 1, maxSize - 1);
 	}
 	
-	static auto read(const LuaContext& context, int index)
+	static auto read(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
 		-> std::tuple<TFirst, TOthers...>
 	{
-		return std::tuple_cat(std::tuple<TFirst>{TFirstReader::read(context, index)}, TOthersReader::read(context, index + 1));
+		if (maxSize <= 0)
+			throw WrongTypeException{"null", typeid(std::tuple<TFirst,TOthers...>)};
+		return std::tuple_cat(std::tuple<TFirst>{TFirstReader::read(context, index)}, TOthersReader::read(context, index + 1, maxSize - 1));
 	}
 
-	static auto testRead(const LuaContext& context, int index)
+	static auto testRead(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
 		-> boost::optional<std::tuple<TFirst, TOthers...>>
 	{
 		if (!test(context, index))
@@ -2453,11 +2465,64 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>>
 		return read(context, index);
 	}
 
-	static auto readSafe(const LuaContext& context, int index)
+	static auto readSafe(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
 		-> std::tuple<TFirst, TOthers...>
 	{
 		try {
-			return std::tuple_cat(std::tuple<TFirst>{TFirstReader::readSafe(context, index)}, TOthersReader::readSafe(context, index + 1));
+			if (maxSize <= 0)
+				throw std::logic_error("Trying to read null into non-default-constructible type");
+			return std::tuple_cat(std::tuple<TFirst>{TFirstReader::readSafe(context, index)}, TOthersReader::readSafe(context, index + 1, maxSize - 1));
+
+		} catch(...) {
+			std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
+		}
+	}
+};
+
+template<typename TFirst, typename... TOthers>
+struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
+		typename std::enable_if<std::is_default_constructible<TFirst>::value>::type
+	>
+{
+	// this is the "TFirst is default-constructible" version
+	
+	typedef std::tuple<TFirst, TOthers...>
+		Tuple;
+	typedef Reader<typename std::decay<TFirst>::type>
+		TFirstReader;
+	typedef Reader<std::tuple<TOthers...>>
+		TOthersReader;
+
+	static bool test(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
+	{
+		if (maxSize <= 0)
+			return true;
+		return TFirstReader::test(context, index) && TOthersReader::test(context, index + 1, maxSize - 1);
+	}
+	
+	static auto read(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
+		-> std::tuple<TFirst, TOthers...>
+	{
+		if (maxSize <= 0)
+			return std::tuple_cat(std::tuple<TFirst>{}, TOthersReader::read(context, index + 1, maxSize - 1));
+		return std::tuple_cat(std::tuple<TFirst>{TFirstReader::read(context, index)}, TOthersReader::read(context, index + 1, maxSize - 1));
+	}
+
+	static auto testRead(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
+		-> boost::optional<std::tuple<TFirst, TOthers...>>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index, int maxSize = std::tuple_size<Tuple>::value)
+		-> std::tuple<TFirst, TOthers...>
+	{
+		try {
+			if (maxSize <= 0)
+				return std::tuple_cat(std::tuple<TFirst>{}, TOthersReader::readSafe(context, index + 1, maxSize - 1));
+			return std::tuple_cat(std::tuple<TFirst>{TFirstReader::readSafe(context, index)}, TOthersReader::readSafe(context, index + 1, maxSize - 1));
 
 		} catch(...) {
 			std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
