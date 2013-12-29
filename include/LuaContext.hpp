@@ -1276,10 +1276,10 @@ private:
 	template<typename TObjectType>
 	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
 
-	// this structure takes a function type and has the "min" and the "max" static const member variables, whose value equal to the min and max number of parameters of the function
-	template<typename TFunctionType, typename = void>
-	struct FunctionArgumentsCounter { static_assert(std::is_function<TFunctionType>::value, "TFunctionType must be a function"); };
-
+	// this structure takes a function arguments list and has the "min" and the "max" static const member variables, whose value equal to the min and max number of parameters of the function
+	template<typename... TArgumentsList>
+	struct FunctionArgumentsCounter {};
+	
 	// 
 	template<typename T>
 	struct IsOptional : public std::false_type {};
@@ -1287,7 +1287,10 @@ private:
 
 static struct LuaEmptyArray_t {}
 	LuaEmptyArray {};
-
+	
+/**************************************************/
+/*            PARTIAL IMPLEMENTATIONS             */
+/**************************************************/
 template<>
 inline auto LuaContext::readTopAndPop<void>(int nb) const
 	-> void
@@ -1351,20 +1354,15 @@ template<>
 struct LuaContext::PusherMaxSize<> { static const int size = 0; };
 
 // implementation of FunctionArgumentsCounter
-template<typename TRetValue, typename TLast, typename... TParams>
-struct LuaContext::FunctionArgumentsCounter<TRetValue (boost::optional<TLast>, TParams...)> {
-	typedef FunctionArgumentsCounter<TRetValue (TParams...)>
+template<typename TFirst, typename... TParams>
+struct LuaContext::FunctionArgumentsCounter<TFirst, TParams...> {
+	typedef FunctionArgumentsCounter<TParams...>
 		SubType;
-	static const int min = SubType::min == 0 ? 0 : SubType::min;
+	static const int min = (IsOptional<TFirst>::value && SubType::min == 0) ? 0 : 1 + SubType::min;
 	static const int max = 1 + SubType::max;
 };
-template<typename TRetValue, typename TLast, typename... TParams>
-struct LuaContext::FunctionArgumentsCounter<TRetValue (TLast, TParams...), typename std::enable_if<!LuaContext::IsOptional<TLast>::value>::type> {
-	static const int min = 1 + LuaContext::FunctionArgumentsCounter<TRetValue (TParams...)>::min;
-	static const int max = 1 + LuaContext::FunctionArgumentsCounter<TRetValue (TParams...)>::max;
-};
-template<typename TRetValue>
-struct LuaContext::FunctionArgumentsCounter<TRetValue ()> {
+template<>
+struct LuaContext::FunctionArgumentsCounter<> {
 	static const int min = 0;
 	static const int max = 0;
 };
@@ -1603,6 +1601,9 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
+	// counts the number of arguments
+	using LocalFunctionArgumentsCounter = FunctionArgumentsCounter<TParameters...>;
+
 	// this is the version for non-trivially destructible objects
 	template<typename TFunctionObject>
 	static auto push(const LuaContext& context, TFunctionObject fn)
@@ -1699,12 +1700,22 @@ private:
 		lua_pop(state, 1);
 
 		// checking if number of parameters is correct
-		const int paramsCount = sizeof...(TParameters);
-		if (argumentsCount < paramsCount) {
+		if (argumentsCount < LocalFunctionArgumentsCounter::min) {
 			// if not, using lua_error to return an error
 			luaL_where(state, 1);
 			lua_pushstring(state, "This function requires at least ");
-			lua_pushnumber(state, paramsCount);
+			lua_pushnumber(state, LocalFunctionArgumentsCounter::min);
+			lua_pushstring(state, " parameter(s)");
+			lua_concat(state, 4);
+
+			// lua_error throws an exception when compiling as C++
+			return lua_error(state);
+
+		} else if (argumentsCount > LocalFunctionArgumentsCounter::max) {
+			// if not, using lua_error to return an error
+			luaL_where(state, 1);
+			lua_pushstring(state, "This function requires at most ");
+			lua_pushnumber(state, LocalFunctionArgumentsCounter::max);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
 
@@ -1713,7 +1724,7 @@ private:
 		}
 
 		// reading parameters from the stack
-		auto parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -paramsCount);
+		auto parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount);
 
 		// calling the function, note that "result" should be a tuple
 		auto result = me->callWithTuple<TReturnType>(*toCall, parameters);
