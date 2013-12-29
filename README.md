@@ -382,9 +382,10 @@ The syntax is the same than above, except that the callbacks take an extra `name
     lua.registerMember<boost::variant<int,bool> (Foo::*)>(
         [](Foo& object, const std::string& memberName) -> int {
             std::cout << "Trying to read member " << memberName << " of object" << std::endl;
+            return 1;
         },
         [](Foo& object, const std::string& memberName, int value) {
-            std::cout << "Trying to write member " << memberName << " of object" << std::endl;
+            std::cout << "Trying to write member " << memberName << " of object with value " << value << std::endl;
         }
     );
     
