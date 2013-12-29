@@ -1547,18 +1547,22 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 };
 
 // enum
-#if !defined(__clang__) || __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 3)
 template<typename TEnum>
 struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::value>::type> {
-	typedef typename std::underlying_type<TEnum>::type
-		RealType;
+	#if !defined(__clang__) || __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ > 3)
+		typedef typename std::underlying_type<TEnum>::type
+			RealType;
+	#else
+		typedef unsigned long
+			RealType;
+	#endif
+
 	static const int minSize = Pusher<RealType>::minSize;
 	static const int maxSize = Pusher<RealType>::maxSize;
 	static int push(const LuaContext& context, TEnum value) {
 		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
-#endif
 
 // any function
 template<typename TReturnType, typename... TParameters>
