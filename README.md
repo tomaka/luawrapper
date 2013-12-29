@@ -294,15 +294,20 @@ Prints `6` and `test`.
 Lua supports functions that return multiple values at once. A C++ function can do so by returning a tuple.
 In this example we return at the same time an int and a string.
 
+Tuples are only supported when returning as a return value for a function. Attempting to write or read a tuple with `writeVariable` or `readVariable` would lead to a compilation error.
+
+
 #### Destroying a lua variable
 
     LuaContext lua;
     
     lua.writeVariable("a", 2);
-
+    
     lua.writeVariable("a", nullptr);        // destroys a
 
 The C++ equivalent for `nil` is `nullptr`.
+
+Note that `nullptr` has its own type, which is different from `0` and `NULL`.
 
 
 #### Custom member functions
@@ -310,8 +315,6 @@ The C++ equivalent for `nil` is `nullptr`.
 In example 3, we saw that you can register functions for a given type with `registerFunction`.
 
 But you can also register functions that don't exist in the class.
-To do so, you need to pass as template parameter a pointer-to-member-function type, and as
-parameter a function or function object that takes as first parameter a reference to the object.
 
     struct Foo { int value; };
 
@@ -323,6 +326,8 @@ parameter a function or function object that takes as first parameter a referenc
     lua.executeCode("a:add(3)");
 
     std::cout << lua.readVariable<Foo>("a").value;  // 8
+    
+The template parameter must be a pointer-to-member-function type. The callback must take as first parameter a reference to the object.
 
 There is an alternative syntax if you want to register a function for a pointer type, because it is illegal to write `void (Foo*::*)(int)`.
 
@@ -349,40 +354,41 @@ Just like `registerFunction`, you can register virtual member variables.
 The second parameter is a function or function object that is called in order to read the value of the variable.
 The third parameter is a function or function object that is called in order to write the value. The third parameter is optional.
     
-    lua.registerMember<bool (Foo::*)>("higher_than_five",
-        [](Foo& object) -> bool { return object.value >= 5; },
-        [](Foo& object, bool higher_than_five) {
+    lua.registerMember<bool (Foo::*)>("value_plus_one",
+        [](Foo& object) -> int {
+            // called when lua code wants to read the variable
+            return object.value + 1;
+        },
+        [](Foo& object, int value_plus_one) {
             // called when lua code wants to modify the variable
-            if (higher_than_five) object.value = 6;
-            else object.value = 4;
+            object.value = value_plus_one - 1;
         }
     );
 
     lua.writeVariable("a", Foo{8});
-    std::cout << lua.executeCode<bool>("return a.higher_than_five");    // true
-
+    std::cout << lua.executeCode<int>("return a.value_plus_one");    // 9
+    
     lua.writeVariable("b", Foo{1});
-    std::cout << lua.executeCode<bool>("return b.higher_than_five");    // false
+    lua.executeCode("b.higher_than_five = 5");
+    std::cout << lua.readVariable<Object>("b").value;               // 4
 
 The alternative syntax also exists.
 
     lua.registerMember<Foo, bool>("higher_than_five", ...same as above...);
 
-Finally you can register functions that will be called when a non-existing variable is read or written.
-The syntax is the same than above, except that you don't pass the name of the variable and that the read and write functions take an extra `name` parameter.
+Finally you can register functions that will be called by default when a non-existing variable is read or written.
+The syntax is the same than above, except that the callbacks take an extra `name` parameter.
     
     lua.registerMember<boost::variant<int,bool> (Foo::*)>(
-        [](Foo& object, const std::string& memberName) -> boost::variant<int,bool> {
-            if (memberName == "value")
-                return object.value;
-            else
-                return false;
+        [](Foo& object, const std::string& memberName) -> int {
+            std::cout << "Trying to read member " << memberName << " of object" << std::endl;
         },
-        [](Foo& object, const std::string& memberName, boost::variant<int,bool> value) {
-            if (memberName == "value")
-                object.value = boost::get<int>(value);
+        [](Foo& object, const std::string& memberName, int value) {
+            std::cout << "Trying to write member " << memberName << " of object" << std::endl;
         }
     );
+    
+Remember that you can return `std::function` from the read callback, allowing you to create real virtual objects.
 
 
 #### Exception safety
