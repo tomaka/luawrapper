@@ -395,7 +395,7 @@ Remember that you can return `std::function` from the read callback, allowing yo
 #### Exception safety
 
 You can safely throw exceptions from inside functions called by Lua.
-They are considered as errors by Lua, and if not handled they will be propagated outside.
+They will be turned into Lua errors, and if not handled they will be turned back into an exception and continue propagating.
 
     lua.writeFunction("test", []() { throw std::runtime_error("Problem"); });
     
