@@ -2467,7 +2467,7 @@ struct LuaContext::Reader<std::tuple<>>
 
 template<typename TFirst, typename... TOthers>
 struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
-		typename std::enable_if<!std::is_default_constructible<TFirst>::value>::type
+		typename std::enable_if<!LuaContext::IsOptional<TFirst>::value>::type		// TODO: replace by std::is_default_constructible when it works on every compiler
 	>
 {
 	// this is the "TFirst is NOT default constructible" version
@@ -2518,7 +2518,7 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
 
 template<typename TFirst, typename... TOthers>
 struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
-		typename std::enable_if<std::is_default_constructible<TFirst>::value>::type
+		typename std::enable_if<LuaContext::IsOptional<TFirst>::value>::type		// TODO: replace by std::is_default_constructible when it works on every compiler
 	>
 {
 	// this is the "TFirst is default-constructible" version
