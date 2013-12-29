@@ -121,8 +121,8 @@ Using `writeFunction` is both easier and faster than `writeVariable` in case of 
 
 Prints `incrementing` and `11`.
 
-In addition to basic types and functions, you can pass any object to `writeVariable`.
-The object will then be moved into Lua by calling its copy or moved constructor constructor. Remember that since they are not a native type, attempting to copy the object into another variable using Lua code will instead make the two variables point to the same object.
+In addition to basic types and functions, you can also pass any object to `writeVariable`.
+The object will then be moved into Lua by calling its copy or move constructor. Remember that since they are not a native type, attempting to copy the object into another variable using Lua code will instead make the two variables point to the same object.
 
 If you want to call an object's member function, you must register it with `registerFunction`, just like in the example above.
 It doesn't matter whether you call `registerFunction` before or after writing the objects, it works in both cases.
