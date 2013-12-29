@@ -1976,6 +1976,41 @@ struct LuaContext::Reader<std::string>
 	}
 };
 
+// enums
+template<typename TType>
+struct LuaContext::Reader<
+			TType,
+			typename std::enable_if<std::is_enum<TType>::value>::type
+		>
+{
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isnumber(context.mState, index) != 0 && fmod(lua_tonumber(context.mState, index), 1.) == 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> TType
+	{
+		return static_cast<TType>(lua_tointeger(context.mState, index));
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<TType>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> TType
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(TType)};
+		return read(context, index);
+	}
+};
+
 // function
 template<typename TRetValue, typename... TParameters>
 struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
