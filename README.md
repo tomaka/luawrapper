@@ -8,7 +8,7 @@ You may wonder why I chose to create my own library while there as so many other
 
 Some are just basic wrappers (with functions to directly manipulate the stack), some others use an external executable to compute the list of functions of a class, and some others are just too complicated to use.
 
-This library was designed to be very simple to use: you can write lua variables (with either a number, a string, a function, an array or a smart pointer to an object), read lua variables, call functions stored in lua variables, and of course execute lua code. That's all.
+This library was designed to be very simple to use: you can write Lua variables (with either a number, a string, a function, an array or any object), read lua variables, and of course execute Lua code. That's all.
 
 ### How to use it?
 This is a headers-only library.
@@ -133,7 +133,7 @@ If you pass a plain object type as template parameter to `readVariable` (for exa
 You also have the possibility to write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported. Functions that have been registered for a type also work with these.
 
 Note however that inheritance is not supported.
-You need to register all of a type's functions, even if you have already registered the functions of its parents.
+You need to register all of a type's functions, even if you have already registered the functions of its parents. Also you can't write an object and attempt to read a reference to its parent type, this would trigger an exception.
 
 
 #### Reading lua code from a file
@@ -145,6 +145,13 @@ This simple example shows that you can easily read lua code (including pre-compi
 
 If you write your own derivate of `std::istream` (for example a decompressor), you can of course also use it.
 Note however that `executeCode` will block until it reaches eof. You should remember this if you use a custom derivate of `std::istream` which awaits for data.
+
+The `executeCode` function can trigger either a `SyntaxErrorException` in case of a parse error, or a `ExecutionErrorException` in case of an unhandled Lua error during execution.
+
+If the code returns a value, you can also pass an additional template parameter to `executeCode`.
+
+    LuaContext lua;
+    std::cout << lua.executeCode<int>("return 1 + 2") << std::endl;     // prints 3
 
 
 #### Executing lua functions
