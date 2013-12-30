@@ -828,14 +828,14 @@ private:
 				if (me.stream.eof())	{ *size = 0; return nullptr; }
 
 				me.stream.read(me.buffer.data(), me.buffer.size());
-				*size = static_cast<size_t>(me.stream.gcount());	// gcount could return a value larger than a size_t, but its maximum is sizeof(me.buffer) so there's no problem
+				*size = static_cast<size_t>(me.stream.gcount());	// gcount could return a value larger than a size_t, but its maximum is me.buffer.size() so there's no problem
 				return me.buffer.data();
 			}
 		};
 
 		// we create an instance of Reader, and we call lua_load
 		Reader reader{code};
-		auto loadReturnValue = lua_load(mState, &Reader::read, &reader, "chunk"
+		const auto loadReturnValue = lua_load(mState, &Reader::read, &reader, "chunk"
 #			if LUA_VERSION_NUM >= 502
 				, nullptr
 #			endif
@@ -874,7 +874,6 @@ private:
 
 	// this function calls what is on the top of the stack and removes it (just like lua_call)
 	// if an exception is triggered, the top of the stack will be removed anyway
-	// In should be a tuple (at least until variadic templates are supported everywhere), Out can be anything
 	template<typename TReturnType, typename... TParameters>
 	auto call(TParameters&&... input) const
 		-> TReturnType
@@ -882,9 +881,10 @@ private:
 		typedef typename Tupleizer<TReturnType>::type
 			RealReturnType;
 		const int outArguments = std::tuple_size<RealReturnType>::value;
+		
+		// we push the parameters on the stack
 		int inArguments;
 		try {
-			// we push the parameters on the stack
 			inArguments = Pusher<std::tuple<TParameters...>>::push(*this, std::make_tuple(std::forward<TParameters>(input)...));
 		} catch(...) {
 			lua_pop(mState, 1);
@@ -939,7 +939,12 @@ private:
 	/**************************************************/
 	/*                PUSH FUNCTIONS                  */
 	/**************************************************/
-	// any object
+	// the Pusher structures allow you to push a value on the stack
+	//  - static const int minSize : minimum size on the stack that the value can have
+	//  - static const int maxSize : maximum size on the stack that the value can have
+	//  - static int push(const LuaContext&, ValueType) : pushes the value on the stack and returns the size on the stack
+
+	// implementation for custom objects
 	template<typename TType, typename = void>
 	struct Pusher {
 		static const int minSize = 1;
@@ -1006,8 +1011,7 @@ private:
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());
-					lua_error(lua);
-					throw "Dummy exception";
+					return lua_error(lua);
 				}
 			};
 
@@ -1062,12 +1066,11 @@ private:
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());
-					lua_error(lua);
-					throw "Dummy exception";
+					return lua_error(lua);
 				}
 			};
 
-			// checking object type
+			// writing structure for this type into the registry
 			context.checkTypeRegistration(&typeid(TType));
 
 			// creating the object
@@ -1090,7 +1093,7 @@ private:
 						lua_settable(context.mState, -3);
 					}
 
-					// settings typeid of shared_ptr this time
+					// the _typeid index of the metatable will store the type_info*
 					lua_pushstring(context.mState, "_typeid");
 					lua_pushlightuserdata(context.mState, const_cast<std::type_info*>(&typeid(TType)));
 					lua_settable(context.mState, -3);
@@ -1117,19 +1120,19 @@ private:
 		}
 	};
 	
-	// this structure has a "size" int member which is equal to the total of the push min size of all the types
+	// this structure has a "size" int static member which is equal to the total of the push min size of all the types
 	template<typename... TTypes>
 	struct PusherTotalMinSize;
 
-	// this structure has a "size" int member which is equal to the total of the push max size of all the types
+	// this structure has a "size" int static member which is equal to the total of the push max size of all the types
 	template<typename... TTypes>
 	struct PusherTotalMaxSize;
 	
-	// this structure has a "size" int member which is equal to the maximum size of the push of all the types
+	// this structure has a "size" int static member which is equal to the maximum size of the push of all the types
 	template<typename... TTypes>
 	struct PusherMinSize;
 	
-	// this structure has a "size" int member which is equal to the maximum size of the push of all the types
+	// this structure has a "size" int static member which is equal to the maximum size of the push of all the types
 	template<typename... TTypes>
 	struct PusherMaxSize;
 
@@ -1137,6 +1140,9 @@ private:
 	/**************************************************/
 	/*            CALL FUNCTION WITH TUPLE            */
 	/**************************************************/
+	// this is a bit of template meta-programming hack
+	// the only interesting element here is "callWithTuple" which calls a function using parameters passed as a tuple
+	// note that it either returns std::tuple<TrueReturnType> or std::tuple<> instead of void
 	template<int...>
 	struct Sequence {};
 	template<typename Sequence>
@@ -1155,13 +1161,15 @@ private:
 	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
+		// implementation with a return type
 		return std::make_tuple(callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
 	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
-		-> typename std::enable_if<std::is_void<TRetValue>::value,std::tuple<>>::type
+		-> typename std::enable_if<std::is_void<TRetValue>::value, std::tuple<>>::type
 	{
+		// implementation without a return type
 		callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type());
 		return std::tuple<>();
 	}
@@ -1170,10 +1178,11 @@ private:
 	/**************************************************/
 	/*                READ FUNCTIONS                  */
 	/**************************************************/
-	// - the "test" function will return true if the variable is of the right type
-	// - the "read" function will assume that the variable is of the right type and read its value
-	// - the "testRead" function will check and read at the same time, returning an empty optional if it is the wrong type
-	// - the "readSafe" function does the same as "testRead" but throws in case of wrong type
+	// the "Reader" structures allow to read data from the stack
+	// - the "test" static function will return true if the variable is of the right type
+	// - the "read" static function will assume that the variable is of the right type and read its value
+	// - the "testRead" static function will check and read at the same time, returning an empty optional if it is the wrong type
+	// - the "readSafe" static function does the same as "testRead" but throws in case of wrong type
 	
 	template<typename TType, typename = void>
 	struct Reader {
@@ -1227,10 +1236,8 @@ private:
 	/*                   UTILITIES                    */
 	/**************************************************/
 	// structure that will ensure that a certain is stored somewhere in the registry
-	// do not clone ValueInRegistry
 	struct ValueInRegistry {
-		// when calling this constructor, the value must be at the top of the stack
-		// this constructor will clone it in the registry
+		// this constructor will clone and hold the value at the top of the stack in the registry
 		ValueInRegistry(lua_State* lua) : lua{lua}
 		{
 			lua_pushlightuserdata(lua, this);
@@ -1238,7 +1245,7 @@ private:
 			lua_settable(lua, LUA_REGISTRYINDEX);
 		}
 		
-		// destroying the function from the registry
+		// removing the function from the registry
 		~ValueInRegistry()
 		{
 			lua_pushlightuserdata(lua, this);
@@ -1246,35 +1253,40 @@ private:
 			lua_settable(lua, LUA_REGISTRYINDEX);
 		}
 
-		// pops the value at the top of the stack
+		// loads the value and puts it at the top of the stack
 		void pop()
 		{
 			lua_pushlightuserdata(lua, this);
 			lua_gettable(lua, LUA_REGISTRYINDEX);
 		}
 
+		ValueInRegistry(const ValueInRegistry&) = delete;
+		ValueInRegistry& operator=(const ValueInRegistry&) = delete;
+
 	private:
-		ValueInRegistry(const ValueInRegistry&);
-		ValueInRegistry& operator=(const ValueInRegistry&);
 		lua_State* lua;
 	};
 
+	// turns a type into a tuple
+	// void is turned into std::tuple<>
+	// existing tuples are untouched
 	template<typename T>
 	struct Tupleizer;
 
 	// this structure takes a pointer to a member function type and returns the base function type
 	template<typename TType>
-	struct RemoveMemberPointerFunction { typedef void type; };			// required because of a bug
+	struct RemoveMemberPointerFunction { typedef void type; };			// required because of a compiler bug
 
 	// this structure takes any object and detects its function type
 	template<typename TObjectType>
 	struct FunctionTypeDetector { typedef typename RemoveMemberPointerFunction<decltype(&std::decay<TObjectType>::type::operator())>::type type; };
 
-	// this structure takes a function arguments list and has the "min" and the "max" static const member variables, whose value equal to the min and max number of parameters of the function
+	// this structure takes a function arguments list and has the "min" and the "max" static const member variables, whose value equal to the min and max number of parameters for the function
+	// the only case where "min != max" is with boost::optional at the end of the list
 	template<typename... TArgumentsList>
 	struct FunctionArgumentsCounter {};
 	
-	// 
+	// true is the template parameter is a boost::optional
 	template<typename T>
 	struct IsOptional : public std::false_type {};
 };
@@ -1292,6 +1304,7 @@ inline auto LuaContext::readTopAndPop<void>(int nb) const
 	lua_pop(mState, nb);
 }
 
+// 
 template<int... S>
 struct LuaContext::IncrementSequence<LuaContext::Sequence<S...>> { typedef Sequence<S..., sizeof...(S)> type; };
 template<>
@@ -1315,11 +1328,11 @@ struct LuaContext::FunctionTypeDetector<TObjectType*>							{ typedef typename F
 
 // this structure takes a pointer to a member function type and returns the base function type
 template<typename TType, typename TRetValue, typename... TParameters>
-struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...)>		{ typedef TRetValue type(TParameters...); };
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...)>					{ typedef TRetValue type(TParameters...); };
 template<typename TType, typename TRetValue, typename... TParameters>
-struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const>		{ typedef TRetValue type(TParameters...); };
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const>				{ typedef TRetValue type(TParameters...); };
 template<typename TType, typename TRetValue, typename... TParameters>
-struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) volatile>		{ typedef TRetValue type(TParameters...); };
+struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) volatile>			{ typedef TRetValue type(TParameters...); };
 template<typename TType, typename TRetValue, typename... TParameters>
 struct LuaContext::RemoveMemberPointerFunction<TRetValue (TType::*)(TParameters...) const volatile>		{ typedef TRetValue type(TParameters...); };
 
@@ -1369,6 +1382,8 @@ struct LuaContext::IsOptional<boost::optional<T>> : public std::true_type {};
 /**************************************************/
 /*                PUSH FUNCTIONS                  */
 /**************************************************/
+// specializations of the Pusher structure
+
 // boolean
 template<>
 struct LuaContext::Pusher<bool> {
@@ -1459,6 +1474,7 @@ template<>
 struct LuaContext::Pusher<LuaEmptyArray_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
+
 	static int push(const LuaContext& context, LuaEmptyArray_t) {
 		lua_newtable(context.mState);
 		return 1;
@@ -1470,6 +1486,7 @@ template<>
 struct LuaContext::Pusher<const std::type_info*> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
+
 	static int push(const LuaContext& context, const std::type_info* ptr) {
 		lua_pushlightuserdata(context.mState, const_cast<std::type_info*>(ptr));
 		return 1;
@@ -1581,18 +1598,21 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 		typedef typename std::underlying_type<TEnum>::type
 			RealType;
 	#else
+		// implementation when std::underlying_type is not supported
 		typedef unsigned long
 			RealType;
 	#endif
 
 	static const int minSize = Pusher<RealType>::minSize;
 	static const int maxSize = Pusher<RealType>::maxSize;
+
 	static int push(const LuaContext& context, TEnum value) {
 		return Pusher<RealType>::push(context, static_cast<RealType>(value));
 	}
 };
 
 // any function
+// this specialization is not directly called, but is called by other specializations
 template<typename TReturnType, typename... TParameters>
 struct LuaContext::Pusher<TReturnType (TParameters...)>
 {
@@ -1600,14 +1620,15 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	static const int maxSize = 1;
 
 	// counts the number of arguments
-	using LocalFunctionArgumentsCounter = FunctionArgumentsCounter<TParameters...>;
+	typedef FunctionArgumentsCounter<TParameters...>
+		LocalFunctionArgumentsCounter;
 
-	// this is the version for non-trivially destructible objects
+	// this is the version of "push" for non-trivially destructible function objects
 	template<typename TFunctionObject>
 	static auto push(const LuaContext& context, TFunctionObject fn)
 		-> typename std::enable_if<!boost::has_trivial_destructor<TFunctionObject>::value, int>::type
 	{
-		// TODO: is_move_constructible not supported by old versions
+		// TODO: is_move_constructible not supported by some compilers
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
 
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
@@ -1615,7 +1636,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		// so we use userdata instead
 		
 		// this function is called when the lua script tries to call our custom data type
-		// we transfer execution to the callback function below
+		// we transfer execution to the "callback" function below
 		const auto callCallback = [](lua_State* lua) -> int {
 			assert(lua_gettop(lua) >= 1);
 			assert(lua_isuserdata(lua, 1));
@@ -1625,7 +1646,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		};
 
 		// this one is called when lua's garbage collector no longer needs our custom data type
-		// we call std::function<int (lua_State*)>'s destructor
+		// we call the function object's destructor
 		const auto garbageCallback = [](lua_State* lua) -> int {
 			assert(lua_gettop(lua) == 1);
 			auto function = static_cast<TFunctionObject*>(lua_touserdata(lua, 1));
@@ -1660,21 +1681,21 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		return 1;
 	}
 
-	// this is the version for trivially destructible objects
+	// this is the version of "push" for trivially destructible objects
 	template<typename TFunctionObject>
 	static auto push(const LuaContext& context, TFunctionObject fn)
 		-> typename std::enable_if<boost::has_trivial_destructor<TFunctionObject>::value, int>::type
 	{
-		// TODO: is_move_constructible not supported by old versions
+		// TODO: is_move_constructible not supported by some compilers
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
 
 		// when the lua script calls the thing we will push on the stack, we want "fn" to be executed
 		// since "fn" doesn't need to be destroyed, we simply push it on the stack
 
-		// we will create a userdata which contains a copy of a function object "int(lua_State*)"
-		// but first we have to create it
+		// this is the cfunction that is the callback
 		const auto function = [](lua_State* state) -> int
 		{
+			// the function object is an upvalue
 			const auto toCall = static_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
 			return callback(state, toCall, lua_gettop(state));
 		};
@@ -1683,13 +1704,14 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		const auto functionObjectLocation = static_cast<TFunctionObject*>(lua_newuserdata(context.mState, sizeof(TFunctionObject)));
 		new (functionObjectLocation) TFunctionObject(std::move(fn));
 
-		// finally pushing the function
+		// pushing the function with the function object as upvalue
 		lua_pushcclosure(context.mState, function, 1);
 		return 1;
 	}
 
 private:
 	// callback that calls the function object
+	// this function is used by the callbacks and handles loading arguments from the stack and pushing the return value back
 	template<typename TFunctionObject>
 	static int callback(lua_State* state, TFunctionObject* toCall, int argumentsCount) {
 		lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
@@ -1705,8 +1727,6 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::min);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-
-			// lua_error throws an exception when compiling as C++
 			return lua_error(state);
 
 		} else if (argumentsCount > LocalFunctionArgumentsCounter::max) {
@@ -1716,8 +1736,6 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::max);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-
-			// lua_error throws an exception when compiling as C++
 			return lua_error(state);
 		}
 
@@ -1734,8 +1752,6 @@ private:
 			lua_pushstring(state, " to ");
 			lua_pushstring(state, ex.destination.name());
 			lua_concat(state, 4);
-
-			// lua_error throws an exception when compiling as C++
 			return lua_error(state);
 		}
 		
@@ -1751,7 +1767,8 @@ private:
 template<typename TReturnType, typename... TParameters>
 struct LuaContext::Pusher<TReturnType (*)(TParameters...)>
 {
-	typedef Pusher<TReturnType(TParameters...)>
+	// using the function-pushing implementation
+	typedef Pusher<TReturnType (TParameters...)>
 		SubPusher;
 	static const int minSize = SubPusher::minSize;
 	static const int maxSize = SubPusher::maxSize;
@@ -1766,6 +1783,7 @@ struct LuaContext::Pusher<TReturnType (*)(TParameters...)>
 template<typename TReturnType, typename... TParameters>
 struct LuaContext::Pusher<TReturnType (&)(TParameters...)>
 {
+	// using the function-pushing implementation
 	typedef Pusher<TReturnType(TParameters...)>
 		SubPusher;
 	static const int minSize = SubPusher::minSize;
@@ -1779,7 +1797,9 @@ struct LuaContext::Pusher<TReturnType (&)(TParameters...)>
 
 // std::function
 template<typename TReturnType, typename... TParameters>
-struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>> {
+struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>>
+{
+	// using the function-pushing implementation
 	typedef Pusher<TReturnType (TParameters...)>
 		SubPusher;
 	static const int minSize = SubPusher::minSize;
@@ -1792,7 +1812,8 @@ struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>> {
 
 // boost::variant
 template<typename... TTypes>
-struct LuaContext::Pusher<boost::variant<TTypes...>> {
+struct LuaContext::Pusher<boost::variant<TTypes...>>
+{
 	static const int minSize = PusherMinSize<TTypes...>::size;
 	static const int maxSize = PusherMaxSize<TTypes...>::size;
 
@@ -1864,6 +1885,8 @@ private:
 /**************************************************/
 /*                READ FUNCTIONS                  */
 /**************************************************/
+// specializations of the Reader structures
+
 // reading null
 template<>
 struct LuaContext::Reader<std::nullptr_t>
