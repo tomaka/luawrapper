@@ -13,8 +13,11 @@ TEST(FunctionsRead, NativeFunctions) {
 	
 	context.writeVariable("f", &Foo::increment);
 
-	const auto f = context.readVariable<std::function<int (int)>>("f");
+	const auto f = context.readVariable<LuaContext::LuaFunctionCaller<int (int)>>("f");
 	EXPECT_EQ(4, f(3));
+	
+	const auto g = context.readVariable<std::function<int (int)>>("f");
+	EXPECT_EQ(4, g(3));
 }
 
 TEST(FunctionsRead, Lambdas) {
@@ -22,16 +25,23 @@ TEST(FunctionsRead, Lambdas) {
 	
 	context.writeFunction("f", [](int x) { return x + 1; });
 
-	const auto f = context.readVariable<std::function<int (int)>>("f");
+	const auto f = context.readVariable<LuaContext::LuaFunctionCaller<int (int)>>("f");
 	EXPECT_EQ(4, f(3));
+	
+	const auto g = context.readVariable<std::function<int (int)>>("f");
+	EXPECT_EQ(4, g(3));
 }
 
 TEST(FunctionsRead, LuaFunctions) {
 	LuaContext context;
 	
 	context.executeCode("f = function(x) return x + 1; end");
-	const auto f = context.readVariable<std::function<int (int)>>("f");
+
+	const auto f = context.readVariable<LuaContext::LuaFunctionCaller<int (int)>>("f");
 	EXPECT_EQ(4, f(3));
+
+	const auto g = context.readVariable<std::function<int (int)>>("f");
+	EXPECT_EQ(4, g(3));
 }
 
 TEST(FunctionsRead, LuaFunctionsCleanup) {

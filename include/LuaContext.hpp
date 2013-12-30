@@ -176,6 +176,12 @@ public:
 	};
 
 	/**
+	 * Function object that holds
+	 */
+	template<typename TFunctionType>
+	class LuaFunctionCaller;
+
+	/**
 	 * Executes lua code from the stream
 	 * @param code		A stream that Lua will read its code from
 	 */
@@ -1378,6 +1384,36 @@ struct LuaContext::FunctionArgumentsCounter<> {
 template<typename T>
 struct LuaContext::IsOptional<boost::optional<T>> : public std::true_type {};
 
+// implementation of LuaFunctionCaller
+template<typename TFunctionType>
+class LuaContext::LuaFunctionCaller { static_assert(std::is_function<TFunctionType>::value, "Template parameter of LuaFunctionCaller must be a function type"); };
+template<typename TRetValue, typename... TParams>
+class LuaContext::LuaFunctionCaller<TRetValue (TParams...)>
+{
+public:
+	TRetValue operator()(TParams&&... params) const
+	{
+		lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
+		lua_gettable(state, LUA_REGISTRYINDEX);
+		const auto me = static_cast<LuaContext*>(lua_touserdata(state, -1));
+		lua_pop(state, 1);
+
+		valueHolder->pop();
+		return me->call<TRetValue>(std::forward<TParams>(params)...);
+	}
+
+private:
+	std::shared_ptr<ValueInRegistry>	valueHolder;
+	lua_State*							state;
+
+private:
+	friend LuaContext;
+	explicit LuaFunctionCaller(lua_State* state) :
+		valueHolder(std::make_shared<ValueInRegistry>(state)),
+		state(state)
+	{}
+};
+
 
 /**************************************************/
 /*                PUSH FUNCTIONS                  */
@@ -2094,6 +2130,41 @@ struct LuaContext::Reader<
 	}
 };
 
+// LuaFunctionCaller
+template<typename TRetValue, typename... TParameters>
+struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>
+{
+	typedef LuaFunctionCaller<TRetValue (TParameters...)>
+		RetType;
+
+	static bool test(const LuaContext& context, int index)
+	{
+		return lua_isfunction(context.mState, index) != 0;
+	}
+	
+	static auto read(const LuaContext& context, int index)
+		-> RetType
+	{
+		return RetType(context.mState);
+	}
+
+	static auto testRead(const LuaContext& context, int index)
+		-> boost::optional<RetType>
+	{
+		if (!test(context, index))
+			return {};
+		return read(context, index);
+	}
+
+	static auto readSafe(const LuaContext& context, int index)
+		-> RetType
+	{
+		if (!test(context, index))
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Function)};
+		return read(context, index);
+	}
+};
+
 // function
 template<typename TRetValue, typename... TParameters>
 struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
@@ -2109,18 +2180,7 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 	static auto read(const LuaContext& context, int index)
 		-> Function
 	{
-		auto beacon = std::make_shared<ValueInRegistry>(context.mState);
-		const auto state = context.mState;
-
-		return [state,beacon](TParameters&&... params) -> TRetValue {
-			lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
-			lua_gettable(state, LUA_REGISTRYINDEX);
-			const auto me = static_cast<LuaContext*>(lua_touserdata(state, -1));
-			lua_pop(state, 1);
-
-			beacon->pop();
-			return me->call<TRetValue>(std::forward<TParameters>(params)...);
-		};
+		return LuaFunctionCaller<TRetValue (TParameters...)>(context.mState);
 	}
 
 	static auto testRead(const LuaContext& context, int index)
