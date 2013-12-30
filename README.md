@@ -32,6 +32,7 @@ All the files outside of the `include` directory are only for testing purposes a
 * requires support for [C++11](http://en.wikipedia.org/wiki/C%2B%2B11), the latest C++ standard
 * requires [Boost](http://boost.org) (headers only)
 * inheritance not supported (and won't be supported until some reflection is added to the C++ language)
+* uses exceptions and RTTI
 
 ### I have the old (2010) version of your library, what did change?
 * you need an up-to-date compiler now
@@ -81,8 +82,8 @@ Prints `3` and `8`.
 
 `writeVariable` supports both `std::function` and native function pointers or references.
 
-The function's parameters and return type are handled as if they were read and written by `readVariable` and `writeVariable`.
-If there are not enough parameters or if parameters are of the wrong type, then a Lua error is triggered.
+The function's parameters and return type are handled as if they were read and written by `readVariable` and `writeVariable`, which means that all types supported by these functions can also be used as function parameters or return type.
+If there are not enough parameters or if parameters are of the wrong type while calling the function from within Lua, then a Lua error is triggered.
 
 If you pass a function object with a single operator(), you can also auto-detect the function type using `writeFunction`:
 
