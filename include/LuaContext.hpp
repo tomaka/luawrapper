@@ -1507,7 +1507,7 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 	}
 };
 
-// vectors or pairs
+// vectors of pairs
 template<typename TType1, typename TType2>
 struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
 	static const int minSize = 1;
@@ -1541,7 +1541,7 @@ struct LuaContext::Pusher<std::vector<TType>> {
 		lua_newtable(context.mState);
 
 		for (unsigned int i = 0; i < value.size(); ++i) {
-			lua_pushinteger(context.mState, i);
+			lua_pushinteger(context.mState, i + 1);
 			Pusher<typename std::decay<TType>::type>::push(context, value[i]);
 			lua_settable(context.mState, -3);
 		}

@@ -249,7 +249,9 @@ If you have a `std::vector` which contains `std::pair`s, it will be considered a
 
 Prints `true` and `6.4`.
 
-You can also use `readVariable` and `writeVariable` to directly read or write inside an array.
+Remember that Lua arrays start at offset 1. When you read a `std::map` from a table created in Lua like this `a = { 5, 12 }`, then the first key is 1.
+
+You can also use `readVariable` and `writeVariable` to directly read or write inside an array. Again, the first offset is 1.
     
     std::cout << lua.readVariable("a", "test") << std::endl;
     std::cout << lua.readVariable("a", 2) << std::endl;

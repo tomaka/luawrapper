@@ -74,12 +74,12 @@ TEST(AdvancedReadWrite, WritingVectors) {
 	
     context.writeVariable("a", std::vector<std::string>{"hello", "world"});
 
-	EXPECT_EQ("hello", context.readVariable<std::string>("a", 0));
-	EXPECT_EQ("world", context.readVariable<std::string>("a", 1));
+	EXPECT_EQ("hello", context.readVariable<std::string>("a", 1));
+	EXPECT_EQ("world", context.readVariable<std::string>("a", 2));
 
 	const auto val = context.readVariable<std::map<int,std::string>>("a");
-	EXPECT_EQ("hello", val.at(0));
-	EXPECT_EQ("world", val.at(1));
+	EXPECT_EQ("hello", val.at(1));
+	EXPECT_EQ("world", val.at(2));
 }
 
 TEST(AdvancedReadWrite, VectorOfPairs) {
@@ -107,13 +107,22 @@ TEST(AdvancedReadWrite, Maps) {
 		{ 1, "hello" },
 		{ -23, "world" }
 	});
+	
+	context.executeCode("b = { \"hello\", \"world\" }");
 
 	EXPECT_EQ("hello", context.readVariable<std::string>("a", 1));
 	EXPECT_EQ("world", context.readVariable<std::string>("a", -23));
+	
+	EXPECT_EQ("hello", context.readVariable<std::string>("b", 1));
+	EXPECT_EQ("world", context.readVariable<std::string>("b", 2));
 
 	const auto val = context.readVariable<std::map<int,std::string>>("a");
 	EXPECT_EQ("hello", val.at(1));
 	EXPECT_EQ("world", val.at(-23));
+	
+	const auto b = context.readVariable<std::map<int,std::string>>("b");
+	EXPECT_EQ("hello", b.at(1));
+	EXPECT_EQ("world", b.at(2));
 }
 
 TEST(AdvancedReadWrite, UnorderedMaps) {
