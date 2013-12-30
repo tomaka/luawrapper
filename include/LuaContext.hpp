@@ -94,7 +94,7 @@ public:
 	}
 
 	/**
-	 *
+	 * Move constructor
 	 */
 	LuaContext(LuaContext&& s) :
 		mState(s.mState)
@@ -105,7 +105,7 @@ public:
 	}
 	
 	/**
-	 *
+	 * Move operator
 	 */
 	LuaContext& operator=(LuaContext&& s)
 	{
@@ -169,7 +169,7 @@ public:
 			luaType(luaType),
 			destination(destination)
 		{
-		};
+		}
 		
 		std::string luaType;
 		const std::type_info& destination;
@@ -177,7 +177,7 @@ public:
 
 	/**
 	 * Executes lua code from the stream
-	 * @param code A stream that lua will read its code from
+	 * @param code		A stream that Lua will read its code from
 	 */
 	void executeCode(std::istream& code)
 	{
@@ -187,8 +187,8 @@ public:
 
 	/**
 	 * Executes lua code from the stream and returns a value
-	 * @param code A stream that lua will read its code from
-	 * @tparam TType The type that the executing code should return
+	 * @param code		A stream that Lua will read its code from
+	 * @tparam TType	The type that the executing code should return
 	 */
 	template<typename TType>
 	auto executeCode(std::istream& code)
@@ -200,7 +200,7 @@ public:
 
 	/**
 	 * Executes lua code given as parameter
-	 * @param code A string containing code that will be executed by lua
+	 * @param code		A string containing code that will be executed by Lua
 	 */
 	void executeCode(const std::string& code)
 	{
@@ -208,9 +208,9 @@ public:
 	}
 	
 	/*
-	 * Executes lua code from the stream and returns a value
-	 * @param code A string containing code that will be executed by lua
-	 * @tparam TType The type that the executing code should return
+	 * Executes Lua code from the stream and returns a value
+	 * @param code		A string containing code that will be executed by Lua
+	 * @tparam TType	The type that the executing code should return
 	 */
 	template<typename TType>
 	auto executeCode(const std::string& code)
@@ -220,8 +220,8 @@ public:
 	}
 
 	/**
-	 * Executes lua code given as parameter
-	 * @param code A string containing code that will be executed by lua
+	 * Executes Lua code
+	 * @param code		A string containing code that will be executed by Lua
 	 */
 	void executeCode(const char* code)
 	{
@@ -230,9 +230,9 @@ public:
 	}
 
 	/*
-	 * Executes lua code from the stream and returns a value
-	 * @param code A string containing code that will be executed by lua
-	 * @tparam TType The type that the executing code should return
+	 * Executes Lua code from the stream and returns a value
+	 * @param code		A string containing code that will be executed by Lua
+	 * @tparam TType	The type that the executing code should return
 	 */
 	template<typename TType>
 	auto executeCode(const char* code)
@@ -243,7 +243,8 @@ public:
 	}
 	
 	/**
-	 * Tells that lua will be allowed to access an object's function
+	 * Tells that Lua will be allowed to access an object's function
+	 * This is the version "registerFunction(name, &Foo::function)"
 	 */
 	template<typename TPointerToMemberFunction>
 	auto registerFunction(const std::string& name, TPointerToMemberFunction pointer)
@@ -253,11 +254,10 @@ public:
 	}
 
 	/**
-	 * Adds a custom function to a type
-	 * The type is determined by the function's first parameter
-	 * @param fn Function which takes as first parameter a std::shared_ptr
-	 * @tparam TObject			Object to register this function to
-	 * @tparam Function type of fn
+	 * Tells that Lua will be allowed to access an object's function
+	 * This is the version with an explicit template parameter: "registerFunction<void (Foo::*)()>(name, [](Foo&) { })"
+	 * @param fn				Function object which takes as first parameter a reference to the object
+	 * @tparam TFunctionType	Pointer-to-member function type
 	 */
 	template<typename TFunctionType, typename TType>
 	void registerFunction(const std::string& functionName, TType fn)
@@ -267,11 +267,11 @@ public:
 	}
 
 	/**
-	 * Adds a custom function to a type
-	 * The type is determined by the function's first parameter
-	 * @param fn Function which takes as first parameter an object
+	 * Tells that Lua will be allowed to access an object's function
+	 * This is the alternative version with an explicit template parameter: "registerFunction<Foo, void (*)()>(name, [](Foo&) { })"
+	 * @param fn				Function object which takes as first parameter a reference to the object
 	 * @tparam TObject			Object to register this function to
-	 * @tparam TFunctionType type of fn
+	 * @tparam TFunctionType	Function type
 	 */
 	template<typename TObject, typename TFunctionType, typename TType>
 	void registerFunction(const std::string& functionName, TType fn)
@@ -305,10 +305,12 @@ public:
 	
 	/**
 	 * Registers a member variable
+	 * This is the version "registerMember(name, &Foo::member)"
 	 */
 	template<typename TObject, typename TVarType>
 	void registerMember(const std::string& name, TVarType TObject::*member)
 	{
+		// implementation simply calls the custom member with getter and setter
 		const auto getter = [=](const TObject& obj) -> TVarType { return obj.*member; };
 		const auto setter = [=](TObject& obj, const TVarType& value) { obj.*member = value; };
 		registerMember<TVarType (TObject::*)>(name, getter, setter);
@@ -316,11 +318,12 @@ public:
 
 	/**
 	 * Registers a member variable
+	 * This is the version "registerMember<Foo, int>(name, getter, setter)"
 	 * @tparam TObject 		 Type to register the member to
 	 * @tparam TVarType		 Type of the member
 	 * @param name			 Name of the member to register
-	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
-	 * @param writeFunction	 Function that takes as parameter a TObject& and a const TVarType&, and modifies the object
+	 * @param readFunction	 Function of type "TVarType (const TObject&)"
+	 * @param writeFunction	 Function of type "void (TObject&, const TVarType&)"
 	 */
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
@@ -330,10 +333,11 @@ public:
 
 	/**
 	 * Registers a member variable
+	 * This is the version "registerMember<int (Foo::*)>(name, getter, setter)"
 	 * @tparam TMemberType 	 Pointer to member object representing the type
 	 * @param name			 Name of the member to register
-	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
-	 * @param writeFunction	 Function that takes as parameter a TObject& and a const TVarType&, and modifies the object
+	 * @param readFunction	 Function of type "TVarType (const TObject&)"
+	 * @param writeFunction	 Function of type "void (TObject&, const TVarType&)"
 	 */
 	template<typename TMemberType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
@@ -344,10 +348,11 @@ public:
 
 	/**
 	 * Registers a non-modifiable member variable
+	 * This is the version "registerMember<Foo, int>(name, getter)"
 	 * @tparam TObject 		 Type to register the member to
 	 * @tparam TVarType		 Type of the member
 	 * @param name			 Name of the member to register
-	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
+	 * @param readFunction	 Function of type "TVarType (const TObject&)"
 	 */
 	template<typename TObject, typename TVarType, typename TReadFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction)
@@ -357,9 +362,10 @@ public:
 
 	/**
 	 * Registers a non-modifiable member variable
+	 * This is the version "registerMember<int (Foo::*)>(name, getter)"
 	 * @tparam TMemberType 	 Pointer to member object representing the type
 	 * @param name			 Name of the member to register
-	 * @param readFunction	 Function that takes as parameter a const TObject& and returns the value of the member variable
+	 * @param readFunction	 Function of type "TVarType (const TObject&)"
 	 */
 	template<typename TMemberType, typename TReadFunction>
 	void registerMember(const std::string& name, TReadFunction readFunction)
@@ -370,8 +376,11 @@ public:
 
 	/**
 	 * Registers a dynamic member variable
+	 * This is the version "registerMember<Foo, int>(getter, setter)"
 	 * @tparam TObject 		 Type to register the member to
 	 * @tparam TVarType		 Type of the member
+	 * @param readFunction	 Function of type "TVarType (const TObject&, const std::string&)"
+	 * @param writeFunction	 Function of type "void (TObject&, const std::string&, const TVarType&)"
 	 */
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
@@ -380,19 +389,11 @@ public:
 	}
 
 	/**
-	 * Registers a dynamic non-modifiable member variable
-	 * @tparam TObject 		 Type to register the member to
-	 * @tparam TVarType		 Type of the member
-	 */
-	template<typename TObject, typename TVarType, typename TReadFunction>
-	void registerMember(TReadFunction readFunction)
-	{
-		registerMemberImpl<TObject, TVarType>(std::move(readFunction));
-	}
-
-	/**
 	 * Registers a dynamic member variable
+	 * This is the version "registerMember<int (Foo::*)>(getter, setter)"
 	 * @tparam TMemberType 	 Pointer to member object representing the type
+	 * @param readFunction	 Function of type "TVarType (const TObject&, const std::string&)"
+	 * @param writeFunction	 Function of type "void (TObject&, const std::string&, const TVarType&)"
 	 */
 	template<typename TMemberType, typename TReadFunction, typename TWriteFunction>
 	void registerMember(TReadFunction readFunction, TWriteFunction writeFunction)
@@ -403,7 +404,22 @@ public:
 
 	/**
 	 * Registers a dynamic non-modifiable member variable
+	 * This is the version "registerMember<Foo, int>(getter)"
+	 * @tparam TObject 		 Type to register the member to
+	 * @tparam TVarType		 Type of the member
+	 * @param readFunction	 Function of type "TVarType (const TObject&, const std::string&)"
+	 */
+	template<typename TObject, typename TVarType, typename TReadFunction>
+	void registerMember(TReadFunction readFunction)
+	{
+		registerMemberImpl<TObject, TVarType>(std::move(readFunction));
+	}
+
+	/**
+	 * Registers a dynamic non-modifiable member variable
+	 * This is the version "registerMember<int (Foo::*)>(getter)"
 	 * @tparam TMemberType 	 Pointer to member object representing the type
+	 * @param readFunction	 Function of type "TVarType (const TObject&, const std::string&)"
 	 */
 	template<typename TMemberType, typename TReadFunction>
 	void registerMember(TReadFunction readFunction)
@@ -415,25 +431,28 @@ public:
 	/**
 	 * Returns true if the value of the variable is an array
 	 * @param variableName Name of the variable to check
+	 * @deprecated
 	 */
 	bool isVariableArray(const std::string& variableName) const
 	{
-		lua_getglobal(mState, variableName.c_str());
-		bool answer = lua_istable(mState, -1);
-		lua_pop(mState, 1);
-		return answer;
+		return isVariableArray(variableName.c_str());
 	}
 
 	/**
 	 * @sa isVariableArray
+	 * @deprecated
 	 */
 	bool isVariableArray(const char* variableName) const
 	{
-		return isVariableArray(std::string{variableName});
+		lua_getglobal(mState, variableName);
+		bool answer = lua_istable(mState, -1);
+		lua_pop(mState, 1);
+		return answer;
 	}
 	
 	/**
 	 * Returns true if variable exists (ie. not nil)
+	 * @deprecated
 	 */
 	bool hasVariable(const std::string& variableName) const	
 	{
@@ -444,14 +463,14 @@ public:
 	}
 
 	/**
-	 * Returns the content of a variable
+	 * Reads the content of a Lua variable
 	 * 
-	 * @throw WrongTypeException When the variable is not convertible to the requested type
+	 * @tparam TType				Type requested for the read
+	 * @throw WrongTypeException	When the variable is not convertible to the requested type
 	 * @sa writeVariable
 	 *
-	 * Readable types are:
-	 * - all types accepted by writeVariable except nullptr
-	 * - std::tuple<> where all members are accepted values
+	 * Readable types are all types accepted by writeVariable except nullptr, std::unique_ptr and function pointers
+	 * References to custom objects are also accepted, in which case it will return the object in-place
 	 *
 	 * After the variable name, you can add other parameters.
 	 * If the variable is an array, it will instead get the element of that array whose offset is the second parameter.
@@ -477,12 +496,15 @@ public:
 	}
 
 	/**
-	 * Changes the content of a global lua variable
+	 * Changes the content of a Lua variable
+	 * 
 	 * Accepted values are:
 	 * - all base types (char, short, int, float, double, bool)
 	 * - std::string
+	 * - enums
+	 * - std::vector<>
 	 * - std::vector<std::pair<>>, std::map<> and std::unordered_map<> (the key and value must also be accepted values)
-	 * - std::function<> (all parameters must be accepted values, and return type must be an accepted value for readVariable)
+	 * - std::function<> (all parameters must be accepted values, and return type must be either an accepted value for readVariable or a tuple)
 	 * - std::shared_ptr<> (std::unique_ptr<> are converted to std::shared_ptr<>)
 	 * - nullptr (writes nil)
 	 * - any object
@@ -510,7 +532,8 @@ public:
 	}
 	
 	/**
-	 * Same as writeVariable but you don't need to convert the parameter to a std::function
+	 * Equivalent to writeVariable(varName, ..., std::function<TFunctionType>(data));
+	 * This version is more effecient than writeVariable if you want to write functions
 	 */
 	template<typename TFunctionType, typename... TData>
 	void writeFunction(TData&&... data) {
@@ -530,7 +553,7 @@ public:
 	}
 
 	/**
-	 * Does the same as writeVariable, except that the function type is automatically detected
+	 * Same as the other writeFunction, except that the template parameter is automatically detected
 	 * This only works if the data is either a native function pointer, or contains one operator() (this is the case for lambdas)
 	 */
 	template<typename... TData>
