@@ -8,7 +8,7 @@ You may wonder why I chose to create my own library while there as so many other
 
 Some are just basic wrappers (with functions to directly manipulate the stack), some others use an external executable to compute the list of functions of a class, and some others are just too complicated to use.
 
-This library was designed to be very simple to use: you can write Lua variables (with either a number, a string, a function, an array or any object), read lua variables, and of course execute Lua code. That's all.
+This library was designed to be very simple to use: you can write Lua variables (with either a number, a string, a function, an array or any object), read Lua variables, and of course execute Lua code. That's all.
 
 ### How to use it?
 This is a headers-only library.
@@ -228,7 +228,7 @@ This means that for example:
         [](boost::optional<int> param1, int param2) {}
     );
 
-    lua.executeCode("foo(7, 7)");
+    lua.executeCode("foo(7)");
 
 This code will trigger a Lua error because the `foo` function requires at least two parameters.
 
