@@ -86,7 +86,8 @@ TEST(FunctionsWrite, FunctionObjectsAutodetect) {
 TEST(FunctionsWrite, Lambdas) {
 	LuaContext context;
 	
-	const auto lambda = [](int x) { return x + 1; };
+	const auto konst = 1;
+	const auto lambda = [&](int x) { return x + konst; };
 	context.writeVariable("f", std::function<int (int)>(lambda));
 	context.writeFunction<int (int)>("g", lambda);
 	context.writeFunction("h", lambda);
