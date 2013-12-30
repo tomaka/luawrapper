@@ -159,7 +159,7 @@ public:
 	};
 
 	/**
-	 * Thrown when trying to cast a lua variable to an unvalid type, eg. trying to read a number when the variable is a string
+	 * Thrown when trying to cast a Lua variable to an unvalid type, eg. trying to read a number when the variable is a string
 	 */
 	class WrongTypeException : public std::runtime_error
 	{
@@ -176,7 +176,9 @@ public:
 	};
 
 	/**
-	 * Function object that holds
+	 * Function object that can call a function stored by Lua
+	 * This type is copiable and movable, but not constructible. It can only be created through readVariable.
+	 * @tparam TFunctionType	Function type (eg. "int (int, bool)")
 	 */
 	template<typename TFunctionType>
 	class LuaFunctionCaller;
@@ -476,7 +478,9 @@ public:
 	 * @sa writeVariable
 	 *
 	 * Readable types are all types accepted by writeVariable except nullptr, std::unique_ptr and function pointers
-	 * References to custom objects are also accepted, in which case it will return the object in-place
+	 * Additionaly supported:
+	 *  - LuaFunctionCaller<FunctionType>, which is an alternative to std::function
+	 *  - references to custom objects, in which case it will return the object in-place
 	 *
 	 * After the variable name, you can add other parameters.
 	 * If the variable is an array, it will instead get the element of that array whose offset is the second parameter.

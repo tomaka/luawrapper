@@ -168,7 +168,8 @@ Prints `5`.
 `readVariable` also supports `std::function`. This allows you to read any function, even the functions created by lua.
 Note however that calling the function after the LuaContext has been destroyed leads to undefined behavior (and likely to a crash), even when the function was originally a C++ function.
 
-The only types that are supported by `writeVariable` but not by `readVariable` are native function pointers and `unique_ptr`s, for obvious reasons.
+If you want to get maximum performances, you can also ask `readVariable` to read a `LuaContext::LuaFunctionCaller<int (int)>` instead of a `std::function<int (int)>`.
+When `readVariable` returns a `std::function`, in fact it is just a wrapping around a `LuaFunctionCaller`.
 
 
 #### Polymorphic functions
