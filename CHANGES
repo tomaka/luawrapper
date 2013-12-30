@@ -1,0 +1,15 @@
+Version 1.1
+=============
+Major:
+ * Functions with a varying number of parameters are now supported
+ * Removed VariableDoesntExistException (this class was a remainder from the old version and was never thrown by anything)
+ * Attempting to call a function with the wrong parameter types now triggers a Lua error instead of an exception
+ * Now possible to write and read enums
+
+Minor:
+ * Fixed writing std::vector producing arrays starting at offset 0
+ * Registered functions are now stored inside the Lua state instead of maps in LuaContext
+ * Added more assertions and more static assertions
+ * Fixed exception safety when writing inside tables
+ * Now using Boost type_traits instead of standard library type_traits
+ * Writing a function or function object with a trivial destructor now writes a C closure instead of a userdata with metatable
