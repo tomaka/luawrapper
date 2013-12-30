@@ -564,17 +564,7 @@ public:
 		typedef typename FunctionTypeDetector<RealDataType>::type
 			DetectedFunctionType;
 		
-#		if LUA_VERSION_NUM >= 502
-			lua_pushglobaltable(mState);
-			try {
-				setTable<-1,DetectedFunctionType>(std::forward<TData>(data)...);
-			} catch(...) {
-				lua_pop(mState, 1);
-			}
-			lua_pop(mState, 1);
-#		else
-			setTable<LUA_GLOBALSINDEX,DetectedFunctionType>(std::forward<TData>(data)...);
-#		endif
+		return writeFunction<DetectedFunctionType>(std::forward<TData>(data)...);
 	}
 	
 
