@@ -2164,7 +2164,7 @@ struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters..
 		-> RetType
 	{
 		if (!test(context, index))
-			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(Function)};
+			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(RetType)};
 		return read(context, index);
 	}
 };
