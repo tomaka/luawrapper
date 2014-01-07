@@ -15,7 +15,7 @@ before_install:
 script:
   - mkdir build
   - cd build
-  - cmake -DCMAKE_CXX_FLAGS=-Wall ..
+  - 'if [ "$CXX" = "g++" ]; then cmake -DCMAKE_CXX_FLAGS=-Wall ..; else cmake -DCMAKE_CXX_COMPILER=clang++-3.5 -DCMAKE_CXX_FLAGS=-Wall ..; fi'
   - make VERBOSE=1
   - ./tests
 env:
