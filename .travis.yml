@@ -15,8 +15,9 @@ before_install:
 script:
   - mkdir build
   - cd build
+  - $CXX --version
   - cmake -DCMAKE_CXX_FLAGS=-Wall ..
-  - make VERBOSE=1
+  - make
   - ./tests
 env:
   - LUA="liblua5.1-dev"
