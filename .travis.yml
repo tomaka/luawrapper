@@ -16,7 +16,7 @@ script:
   - mkdir build
   - cd build
   - cmake -DCMAKE_CXX_FLAGS=-Wall ..
-  - make
+  - make VERBOSE=1
   - ./tests
 env:
   - LUA="liblua5.1-dev"
