@@ -534,6 +534,7 @@ public:
 				setTable<-1,RealDataType>(std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
+				throw;
 			}
 			lua_pop(mState, 1);
 #		else
@@ -555,6 +556,7 @@ public:
 				setTable<-1,TFunctionType>(std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
+				throw;
 			}
 			lua_pop(mState, 1);
 #		else
