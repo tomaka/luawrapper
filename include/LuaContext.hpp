@@ -2231,6 +2231,9 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<Vector>
 	{
+		if (!test(context, index))
+			return {};
+
 		Vector result;
 
 		// we traverse the table at the top of the stack
@@ -2310,6 +2313,9 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<std::map<TKey,TValue>>
 	{
+		if (!test(context, index))
+			return {};
+
 		std::map<TKey,TValue> result;
 
 		// we traverse the table at the top of the stack
@@ -2389,6 +2395,9 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<std::unordered_map<TKey,TValue>>
 	{
+		if (!test(context, index))
+			return {};
+
 		std::unordered_map<TKey,TValue> result;
 
 		// we traverse the table at the top of the stack
