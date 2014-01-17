@@ -1798,10 +1798,16 @@ private:
 		}
 		
 		// calling the function, note that "result" should be a tuple
-		auto result = me->callWithTuple<TReturnType>(*toCall, *parameters);
+		try {
+			auto result = me->callWithTuple<TReturnType>(*toCall, *parameters);
 
-		// pushing the result on the stack and returning number of pushed elements
-		return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
+			// pushing the result on the stack and returning number of pushed elements
+			return Pusher<typename std::decay<decltype(result)>::type>::push(*me, std::move(result));
+
+		} catch (...) {
+			Pusher<std::exception_ptr>::push(*me, std::current_exception());
+			return lua_error(state);
+		}
 	}
 };
 
