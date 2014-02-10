@@ -1174,7 +1174,7 @@ private:
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
 		// implementation with a return type
-		return std::make_tuple(callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
+		return std::tuple<TRetValue>(callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
@@ -1912,6 +1912,10 @@ struct LuaContext::Pusher<std::tuple<TTypes...>> {
 		return push2(context, value, std::integral_constant<int,0>{});
 	}
 
+	static int push(const LuaContext& context, std::tuple<TTypes...>&& value) {
+		return push2(context, std::move(value), std::integral_constant<int,0>{});
+	}
+
 private:
 	template<int N>
 	static int push2(const LuaContext& context, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
@@ -1924,8 +1928,24 @@ private:
 			throw;
 		}
 	}
+
+	template<int N>
+	static int push2(const LuaContext& context, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
+		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
+		const int pushed = Pusher<typename std::decay<ElemType>::type>::push(context, std::move(std::get<N>(value)));
+		try {
+			return pushed + push2(context, std::move(value), std::integral_constant<int,N+1>{});
+		} catch(...) {
+			lua_pop(context.mState, pushed);
+			throw;
+		}
+	}
 	
 	static int push2(const LuaContext&, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return 0;
+	}
+	
+	static int push2(const LuaContext&, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
 		return 0;
 	}
 };
