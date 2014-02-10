@@ -178,7 +178,7 @@ TEST(CustomTypes, GenericMembers) {
     EXPECT_EQ(18, context.executeCode<int>("return obj.bowl"));
 }
 
-TEST(CustomTypes, CopiesCheck) {
+TEST(CustomTypes, CopiesCheckReadWrite) {
 	int copiesCount = 0;
 	int movesCount = 0;
 
@@ -207,5 +207,27 @@ TEST(CustomTypes, CopiesCheck) {
 
 	context.readVariable<Foo&>("obj");
     EXPECT_EQ(1, copiesCount);
+    EXPECT_EQ(1, movesCount);
+}
+
+TEST(CustomTypes, CopiesCheckReturnByValue) {
+	int copiesCount = 0;
+	int movesCount = 0;
+	
+	struct Foo {
+		Foo(int* copiesCount, int* movesCount) : copiesCount(copiesCount), movesCount(movesCount) {}
+		Foo(const Foo& f) : copiesCount(f.copiesCount), movesCount(f.movesCount) { ++*copiesCount; }
+		Foo(Foo&& f) : copiesCount(f.copiesCount), movesCount(f.movesCount) { ++*movesCount; }
+
+		int* copiesCount;
+		int* movesCount;
+	};
+	
+	
+	LuaContext context;
+	context.writeFunction("build", [&]() { return Foo{&copiesCount, &movesCount}; });
+	
+	context.executeCode("obj = build()");
+    EXPECT_EQ(0, copiesCount);
     EXPECT_EQ(1, movesCount);
 }
