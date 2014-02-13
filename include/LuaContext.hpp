@@ -2049,7 +2049,7 @@ struct LuaContext::Reader<std::nullptr_t>
 	{
 		if (!test(context, index))
 			return {};
-		return read(context, index);
+		return nullptr;
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
@@ -2068,7 +2068,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_integral<TType>::value>::type
 		>
 {
-	using ReturnType = TType;
+	using ReturnType = lua_Integer;
 
 	static bool test(const LuaContext& context, int index)
 	{
@@ -2109,7 +2109,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_floating_point<TType>::value>::type
 		>
 {
-	using ReturnType = TType;
+	using ReturnType = lua_Number;
 
 	static bool test(const LuaContext& context, int index)
 	{
@@ -2195,17 +2195,19 @@ struct LuaContext::Reader<std::string>
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<std::string>
 	{
-		if (!test(context, index))
+		const auto val = lua_tostring(context.mState, index);
+		if (val == 0)
 			return {};
-		return read(context, index);
+		return std::string(val);
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> std::string
 	{
-		if (!test(context, index))
+		const auto val = lua_tostring(context.mState, index);
+		if (val == 0)
 			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(std::string)};
-		return read(context, index);
+		return std::string(val);
 	}
 };
 
@@ -2285,34 +2287,32 @@ struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters..
 template<typename TRetValue, typename... TParameters>
 struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 {
+	using SubReader =
+		Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>;
 	using ReturnType =
-		std::function<TRetValue (TParameters...)>;
+		typename SubReader::ReturnType;
 
 	static bool test(const LuaContext& context, int index)
 	{
-		return lua_isfunction(context.mState, index) != 0;
+		return SubReader::test(context, index);
 	}
 	
 	static auto read(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		return LuaFunctionCaller<TRetValue (TParameters...)>(context.mState);
+		return SubReader::read(context, index);
 	}
 
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(context, index))
-			return {};
-		return read(context, index);
+		return SubReader::testRead(context, index);
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		if (!test(context, index))
-			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(ReturnType)};
-		return read(context, index);
+		return SubReader::readSafe(context, index);
 	}
 };
 
@@ -2585,23 +2585,19 @@ struct LuaContext::Reader<boost::optional<TType>>
 	static auto read(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		return lua_isnil(context.mState, index) ? boost::optional<TType>{} : boost::optional<TType>{SubReader::read(context, index)};
+		return lua_isnil(context.mState, index) ? ReturnType{} : ReturnType{SubReader::read(context, index)};
 	}
 
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(context, index))
-			return {};
-		return read(context, index);
+		return lua_isnil(context.mState, index) ? ReturnType{} : ReturnType{SubReader::testRead(context, index)};
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		if (!test(context, index))
-			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(boost::optional<TType>)};
-		return read(context, index);
+		return lua_isnil(context.mState, index) ? ReturnType{} : ReturnType{SubReader::readSafe(context, index)};
 	}
 };
 
