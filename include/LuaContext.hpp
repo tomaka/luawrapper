@@ -189,6 +189,11 @@ public:
 	struct LuaEmptyArray_t {};
 
 	/**
+	 * Type for a metatable
+	 */
+	struct Metatable_t {};
+
+	/**
 	 * Executes lua code from the stream
 	 * @param code		A stream that Lua will read its code from
 	 */
@@ -613,6 +618,16 @@ private:
 
 		lookIntoStackTop(std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
+
+	template<typename... OffsetTypeOthers>
+	void lookIntoStackTop(Metatable_t, OffsetTypeOthers&&... offsetOthers) const {
+		lua_getmetatable(mState, -1);
+		lua_remove(mState, -2);
+
+		lookIntoStackTop(std::forward<OffsetTypeOthers>(offsetOthers)...);
+	}
+
+
 	void lookIntoStackTop() const {
 	}
 	
@@ -630,6 +645,7 @@ private:
 		assert(lua_istable(mState, tableIndex));
 		lua_settable(mState, tableIndex);
 	}
+
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const std::string& index, TData&& data) {
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
@@ -638,6 +654,7 @@ private:
 		assert(lua_istable(mState, tableIndex));
 		lua_setfield(mState, tableIndex, index.c_str());
 	}
+
 	template<int TTableIndex, typename TDataType, typename TData>
 	void setTable(const char* index, TData&& data) {
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
@@ -646,6 +663,16 @@ private:
 		assert(lua_istable(mState, tableIndex));
 		lua_setfield(mState, tableIndex, index);
 	}
+
+	template<int TTableIndex, typename TDataType, typename TData>
+	void setTable(Metatable_t, TData&& data) {
+		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
+		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+		assert(lua_istable(mState, tableIndex));
+		lua_setmetatable(mState, tableIndex);
+	}
+
 	template<int TTableIndex, typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
 	void setTable(TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
@@ -659,6 +686,32 @@ private:
 			throw;
 		}
 		lua_pop(mState, 1);
+	}
+
+	template<int TTableIndex, typename TDataType, typename TIndex2, typename... TIndices>
+	void setTable(Metatable_t, TIndex2&& index2, TIndices&&... indices) {
+		if (lua_getmetatable(mState, TTableIndex) == 0)
+		{
+			lua_newtable(mState);
+			const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+			try {
+				setTable<-1,TDataType>(std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+			} catch(...) {
+				lua_pop(mState, 1);
+				throw;
+			}
+			lua_setmetatable(mState, tableIndex);
+		}
+		else
+		{
+			try {
+				setTable<-1,TDataType>(std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+			} catch(...) {
+				lua_pop(mState, 1);
+				throw;
+			}
+			lua_pop(mState, 1);
+		}
 	}
 
 	// simple function that reads the "nb" first top elements of the stack, pops them, and returns the value
@@ -1310,6 +1363,8 @@ private:
 
 static LuaContext::LuaEmptyArray_t
 	LuaEmptyArray {};
+static LuaContext::Metatable_t
+	LuaMetatable {};
 	
 /**************************************************/
 /*            PARTIAL IMPLEMENTATIONS             */

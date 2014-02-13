@@ -1,4 +1,4 @@
-## Tomaka17's lua wrapper
+## Tomaka's lua wrapper
 
 ### What is this library?
 This lua wrapper for C++ is a library which allows you to easily manage lua code. It was designed to be as simple as possible to use.
@@ -290,6 +290,23 @@ Remember that you can create recursive variants, so you can read arrays which co
 
 This `AnyValue` can store any lua value, except functions and custom objects.
 
+
+#### Metatables
+
+You can read or write the metatable of an object with `readVariable`, `writeVariable` or `writeFunction` as if it was an array, using the special `LuaMetatable` index.
+The metatable is automatically created if it doesn't exist.
+
+    struct Foo {};
+    
+    LuaContext lua;
+    lua.writeVariable("foo", Foo{});
+    lua.writeFunction("foo", LuaMetatable, "__call", [](Foo&) {  });
+    lua.executeCode("foo()");   // calls the lambda above
+
+Note that functions and custom objects written by this library work thanks to their metatable.
+Modifying the metatable of a custom object can break it, especially modifying the `__gc` entry can lead to a memory leak.
+
+
 #### Returning multiple values
 
     LuaContext lua;
@@ -308,7 +325,7 @@ In this example we return at the same time an int and a string.
 Tuples are only supported when returning as a return value for a function. Attempting to write or read a tuple with `writeVariable` or `readVariable` would lead to a compilation error.
 
 
-#### Destroying a lua variable
+#### Destroying a Lua variable
 
     LuaContext lua;
     

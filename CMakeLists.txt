@@ -49,6 +49,7 @@ add_executable(tests
 	tests/functions_read.cpp
 	tests/custom_types.cpp
 	tests/movable.cpp
+	tests/metatables.cpp
 )
 
 target_link_libraries(tests
