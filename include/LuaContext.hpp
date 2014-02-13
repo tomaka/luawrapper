@@ -2610,7 +2610,7 @@ template<typename... TTypes>
 struct LuaContext::Reader<boost::variant<TTypes...>>
 {
 private:
-	struct ReaderApplier
+	struct ReturnTypeApplier
 	{
 		template<typename T>
 		struct apply
@@ -2623,7 +2623,7 @@ private:
 public:
 	typedef boost::variant<TTypes...>
 		RawVariant;
-	typedef typename boost::mpl::transform<typename RawVariant::types, ReaderApplier>::type
+	typedef typename boost::mpl::transform<typename RawVariant::types, ReturnTypeApplier>::type
 		TransformedTypes;
 	typedef typename boost::make_variant_over<TransformedTypes>::type
 		ReturnType;
@@ -2668,7 +2668,11 @@ public:
 	{
 		if (!test(context, index))
 			return {};
-		return read(context, index);
+		try {
+			return read(context, index);
+		} catch (...) {
+			return {};
+		}
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
