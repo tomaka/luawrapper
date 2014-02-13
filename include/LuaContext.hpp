@@ -184,6 +184,11 @@ public:
 	class LuaFunctionCaller;
 
 	/**
+	 * Type that is considered as an empty array
+	 */
+	struct LuaEmptyArray_t {};
+
+	/**
 	 * Executes lua code from the stream
 	 * @param code		A stream that Lua will read its code from
 	 */
@@ -1303,7 +1308,7 @@ private:
 	struct IsOptional : public std::false_type {};
 };
 
-static struct LuaEmptyArray_t {}
+static LuaContext::LuaEmptyArray_t
 	LuaEmptyArray {};
 	
 /**************************************************/
@@ -1513,7 +1518,7 @@ struct LuaContext::Pusher<std::nullptr_t> {
 
 // empty arrays
 template<>
-struct LuaContext::Pusher<LuaEmptyArray_t> {
+struct LuaContext::Pusher<LuaContext::LuaEmptyArray_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
