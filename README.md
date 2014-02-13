@@ -132,8 +132,16 @@ If the error is not handled by the Lua code, then it will propagate outside of `
     
     try {
         lua.executeCode("test()");
-    } catch(...) {
-        ...
+
+    } catch(const ExecutionErrorException& e) {
+        std::cout << e.what() << std::endl;           // prints an error message
+
+        try {
+            std::rethrow_if_nested(e);
+        } catch(const std::runtime_error& e) {
+            // e is the exception that was thrown from inside the lambda
+            std::cout << e.what() << std::endl;       // prints "Problem"
+        }
     }
 
 
@@ -173,7 +181,7 @@ Note however that inheritance is not supported.
 You need to register all of a type's functions, even if you have already registered the functions of its parents. You can't write an object and attempt to read a reference to its parent type either, this would trigger an exception.
 
 
-#### Executing lua functions
+#### Executing Lua functions
 
     LuaContext lua;
 
