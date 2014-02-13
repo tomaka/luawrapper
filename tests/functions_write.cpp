@@ -21,6 +21,22 @@ TEST(FunctionsWrite, NativeFunctions) {
 	EXPECT_THROW(context.executeCode<int>("return f(true)"), LuaContext::ExecutionErrorException);
 }
 
+TEST(FunctionsWrite, ConstRefParameters)
+{
+	struct Foo {
+		static int length(const std::string& x)
+		{
+			EXPECT_EQ("test", x);
+			return x.length();
+		}
+	};
+
+	LuaContext context;
+	
+	context.writeVariable("f", &Foo::length);
+	EXPECT_EQ(4, context.executeCode<int>("return f('test')"));
+}
+
 TEST(FunctionsWrite, FunctionObjects) {
 	struct Foo {
 		int operator()(int x) {
