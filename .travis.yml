@@ -23,3 +23,6 @@ script:
 env:
   - LUA="liblua5.1-dev"
   - LUA="liblua5.2-dev"
+matrix:
+  allow_failures:
+    - compiler: clang
