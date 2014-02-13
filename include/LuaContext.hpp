@@ -2609,11 +2609,24 @@ struct LuaContext::Reader<boost::optional<TType>>
 template<typename... TTypes>
 struct LuaContext::Reader<boost::variant<TTypes...>>
 {
+private:
+	struct ReaderApplier
+	{
+		template<typename T>
+		struct apply
+		{
+			typedef typename Reader<T>::ReturnType
+				type;
+		};
+	};
+
+public:
 	typedef boost::variant<TTypes...>
-		Variant;
-	//typedef typename boost::make_variant_over<typename boost::mpl::transform<typename Variant::types, typename Reader<boost::mpl::_1>::ReturnType>::type>::type
-	//	ReturnType;
-	typedef Variant ReturnType;
+		RawVariant;
+	typedef typename boost::mpl::transform<typename RawVariant::types, ReaderApplier>::type
+		TransformedTypes;
+	typedef typename boost::make_variant_over<TransformedTypes>::type
+		ReturnType;
 	
 private:
 	template<typename TIterBegin, typename TIterEnd, typename = void>
