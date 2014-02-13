@@ -2068,7 +2068,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_integral<TType>::value>::type
 		>
 {
-	using ReturnType = lua_Integer;
+	using ReturnType = TType;
 
 	static bool test(const LuaContext& context, int index)
 	{
@@ -2109,7 +2109,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_floating_point<TType>::value>::type
 		>
 {
-	using ReturnType = lua_Number;
+	using ReturnType = TType;
 
 	static bool test(const LuaContext& context, int index)
 	{
