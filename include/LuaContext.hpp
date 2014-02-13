@@ -186,7 +186,7 @@ public:
 	/**
 	 * Type that is considered as an empty array
 	 */
-	struct LuaEmptyArray_t {};
+	struct EmptyArray_t {};
 
 	/**
 	 * Type for a metatable
@@ -1361,7 +1361,7 @@ private:
 	struct IsOptional : public std::false_type {};
 };
 
-static LuaContext::LuaEmptyArray_t
+static LuaContext::EmptyArray_t
 	LuaEmptyArray {};
 static LuaContext::Metatable_t
 	LuaMetatable {};
@@ -1573,11 +1573,11 @@ struct LuaContext::Pusher<std::nullptr_t> {
 
 // empty arrays
 template<>
-struct LuaContext::Pusher<LuaContext::LuaEmptyArray_t> {
+struct LuaContext::Pusher<LuaContext::EmptyArray_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(const LuaContext& context, LuaEmptyArray_t) {
+	static int push(const LuaContext& context, EmptyArray_t) {
 		lua_newtable(context.mState);
 		return 1;
 	}
