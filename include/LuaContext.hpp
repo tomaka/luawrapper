@@ -2610,6 +2610,7 @@ template<typename... TTypes>
 struct LuaContext::Reader<boost::variant<TTypes...>>
 {
 private:
+	// this type satisfies the "MPL metaclass" requirement, and can transform a list of types into what the Reader would read from them
 	struct ReturnTypeApplier
 	{
 		template<typename T>
@@ -2627,58 +2628,83 @@ public:
 		ReturnType;
 	
 private:
+	// class doing operations for a range of types from TIterBegin to TIterEnd
 	template<typename TIterBegin, typename TIterEnd, typename = void>
 	struct VariantReader {
-		static ReturnType read(const LuaContext& ctxt, int index)
+		static auto readSafe(const LuaContext& ctxt, int index)
+			-> ReturnType
 		{
 			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
 			if (val.is_initialized())
 				return ReturnType{std::move(val.get())};
-			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::read(ctxt, index);
+			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::readSafe(ctxt, index);
+		}
+
+		static auto testRead(const LuaContext& ctxt, int index)
+			-> boost::optional<ReturnType>
+		{
+			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
+			if (val.is_initialized())
+				return ReturnType{std::move(val.get())};
+			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::testRead(ctxt, index);
+		}
+		
+		static bool test(const LuaContext& ctxt, int index)
+		{
+			if (Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::test(ctxt, index))
+				return true;
+			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::test(ctxt, index);
 		}
 	};
 
+	// specialization of class above being called when list of remaining types is empty
 	template<typename TIterBegin, typename TIterEnd>
 	struct VariantReader<TIterBegin, TIterEnd, typename std::enable_if<boost::mpl::distance<TIterBegin, TIterEnd>::type::value == 0>::type>
 	{
-		static ReturnType read(const LuaContext& ctxt, int index) {
+		static auto readSafe(const LuaContext& ctxt, int index)
+			-> ReturnType
+		{
 			throw WrongTypeException(lua_typename(ctxt.mState, lua_type(ctxt.mState, index)), typeid(ReturnType));
 		}
+
+		static auto testRead(const LuaContext& ctxt, int index)
+			-> boost::optional<ReturnType> 
+		{
+			return {};
+		}
+		
+		static bool test(const LuaContext& ctxt, int index)
+		{
+			return false;
+		}
 	};
+
+	// this is the main type
+	typedef VariantReader<typename boost::mpl::begin<typename RawVariant::types>::type, typename boost::mpl::end<typename RawVariant::types>::type>
+		MainVariantReader;
 
 public:
 	static bool test(const LuaContext& context, int index)
 	{
-		return true;
+		return MainVariantReader::test(context, index);
 	}
 	
 	static auto read(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		typedef typename boost::mpl::begin<typename RawVariant::types>::type	Begin;
-		typedef typename boost::mpl::end<typename RawVariant::types>::type		End;
-
-		return VariantReader<Begin, End>::read(context, index);
+		return readSafe(context, index);
 	}
 
 	static auto testRead(const LuaContext& context, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(context, index))
-			return {};
-		try {
-			return read(context, index);
-		} catch (...) {
-			return {};
-		}
+		return MainVariantReader::testRead(context, index);
 	}
 
 	static auto readSafe(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		if (!test(context, index))
-			throw WrongTypeException{lua_typename(context.mState, lua_type(context.mState, index)), typeid(ReturnType)};
-		return read(context, index);
+		return MainVariantReader::readSafe(context, index);
 	}
 };
 
