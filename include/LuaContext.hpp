@@ -636,7 +636,8 @@ private:
 	// the dataPusher MUST push only one thing on the stack
 	// TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
 	template<int TTableIndex, typename TDataType, typename TIndex, typename TData>
-	void setTable(TIndex&& index, TData&& data) {
+	void setTable(TIndex&& index, TData&& data)
+	{
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		Pusher<typename std::decay<TIndex>::type>::push(*this, index);
@@ -647,7 +648,8 @@ private:
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
-	void setTable(const std::string& index, TData&& data) {
+	void setTable(const std::string& index, TData&& data)
+	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
@@ -656,7 +658,8 @@ private:
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
-	void setTable(const char* index, TData&& data) {
+	void setTable(const char* index, TData&& data)
+	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
@@ -665,7 +668,8 @@ private:
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
-	void setTable(Metatable_t, TData&& data) {
+	void setTable(Metatable_t, TData&& data)
+	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		Pusher<typename std::decay<TDataType>::type>::push(*this, std::forward<TData>(data));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
@@ -674,7 +678,9 @@ private:
 	}
 
 	template<int TTableIndex, typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
-	void setTable(TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) {
+	auto setTable(TIndex1&& index1, TIndex2&& index2, TIndices&&... indices)
+		-> typename std::enable_if<!std::is_same<typename std::decay<TIndex1>::type, Metatable_t>::value>::type
+	{
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		Pusher<typename std::decay<TIndex1>::type>::push(*this, std::forward<TIndex1>(index1));
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
@@ -689,7 +695,8 @@ private:
 	}
 
 	template<int TTableIndex, typename TDataType, typename TIndex2, typename... TIndices>
-	void setTable(Metatable_t, TIndex2&& index2, TIndices&&... indices) {
+	void setTable(Metatable_t, TIndex2&& index2, TIndices&&... indices)
+	{
 		if (lua_getmetatable(mState, TTableIndex) == 0)
 		{
 			lua_newtable(mState);
