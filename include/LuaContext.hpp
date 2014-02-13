@@ -2615,7 +2615,7 @@ private:
 		template<typename T>
 		struct apply
 		{
-			typedef typename Reader<T>::ReturnType
+			typedef typename Reader<typename std::decay<T>::type>::ReturnType
 				type;
 		};
 	};
@@ -2623,9 +2623,7 @@ private:
 public:
 	typedef boost::variant<TTypes...>
 		RawVariant;
-	typedef typename boost::mpl::transform<typename RawVariant::types, ReturnTypeApplier>::type
-		TransformedTypes;
-	typedef typename boost::make_variant_over<TransformedTypes>::type
+	typedef typename boost::make_variant_over<typename boost::mpl::transform<typename RawVariant::types, ReturnTypeApplier>::type>::type
 		ReturnType;
 	
 private:
@@ -2657,8 +2655,8 @@ public:
 	static auto read(const LuaContext& context, int index)
 		-> ReturnType
 	{
-		typedef typename boost::mpl::begin<typename ReturnType::types>::type		Begin;
-		typedef typename boost::mpl::end<typename ReturnType::types>::type		End;
+		typedef typename boost::mpl::begin<typename RawVariant::types>::type	Begin;
+		typedef typename boost::mpl::end<typename RawVariant::types>::type		End;
 
 		return VariantReader<Begin, End>::read(context, index);
 	}
