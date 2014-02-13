@@ -51,16 +51,19 @@ All the examples below are in C++, except the parameter passed to `executeCode` 
     LuaContext lua;
     lua.writeVariable("x", 5);
     lua.executeCode("x = x + 2;");
-    std::cout << lua.readVariable<int>("x") << std::endl;
+    std::cout << lua.readVariable<int>("x") << std::endl;       // prints 7
 
-Prints `7`.
+Reading and writing global variables of the Lua context can be done with `writeVariable` and `readVariable`.
 
 All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::string`, can be read or written. `enum`s can also be read or written but are turned into numbers.
 
-An exception is thrown if you try to read a value of the wrong type or if you try to read a non-existing variable.
+`readVariable` requires a template parameter which tells the type of the variable that should be read. A `WrongTypeException` is thrown if Lua can't convert the variable to the type you requested, or if you try to read a non-existing variable.
+
 If you don't know the type of a variable in advance, you can read a `boost::variant`. If you want to read a variable but don't know whether it exists, you can read a `boost::optional`. More informations about this below.
 
 #### Writing functions
+
+Writing a function is as easy as writing a value:
 
     void show(int value) {
         std::cout << value << std::endl;
@@ -68,48 +71,81 @@ If you don't know the type of a variable in advance, you can read a `boost::vari
 
     LuaContext lua;
     lua.writeVariable("show", &show);
-    lua.executeCode("show(5);");
-    lua.executeCode("show(7);");
+    lua.executeCode("show(5)");     // calls the show() function in C++, which prints 5
+    lua.executeCode("show(7)");     // prints 7
 
-Prints `5` and `7`.
+`writeVariable` also supports `std::function`s:
+
+    std::function<void (int)> f = [](int v) { std::cout << v << std::endl; };
 
     LuaContext lua;
-    lua.writeVariable("show", std::function<void (int)>{[](int v) { std::cout << v << std::endl; }});
-    lua.executeCode("show(3);");
-    lua.executeCode("show(8);");
-
-Prints `3` and `8`.
-
-`writeVariable` supports both `std::function` and native function pointers or references.
+    lua.writeVariable("show", f);
+    lua.executeCode("show(3)");     // prints 3
+    lua.executeCode("show(8)");     // prints 8
 
 The function's parameters and return type are handled as if they were read and written by `readVariable` and `writeVariable`, which means that all types supported by these functions can also be used as function parameters or return type.
-If there are not enough parameters or if parameters are of the wrong type while calling the function from within Lua, then a Lua error is triggered.
 
-If you pass a function object with a single operator(), you can also auto-detect the function type using `writeFunction`:
+If some Lua code attempts to call a function with fewer parameters or with parameters of the wrong type, then a Lua error is triggered.
+
+Converting a lambda function to a `std::function` is costly. Instead you can use `writeFunction`:
+    
+    // note: this is C++14
+    const auto increment = [](auto v) { return v + 1; }
+
+    LuaContext lua;
+    lua.writeFunction<int (int)>("incrementInt", increment);
+    lua.writeFunction<double (double)>("incrementDouble", increment);
+
+If you pass a function object with a single operator(), you can also skip the template parameter of `writeFunction`, in which case the type will be automatically detected.
+This is the easiest way to write a lambda.
 
     LuaContext lua;
     lua.writeFunction("show", [](int v) { std::cout << v << std::endl; });
 
-`writeFunction` also accepts an explicit template argument if the type is ambiguous:
 
-    // note: this is C++14
-    const auto increment = [](auto v) { return v + 1; };
-    
+#### Executing code
+
+Executing Lua code is done with the `executeCode` function.
+By default it takes no template parameter, but if the code returns a value, you can pass one to request the specific type to be returned.
+
     LuaContext lua;
-    lua.writeFunction<int (int)>("incrementInt", increment);
-    lua.writeFunction<double (double)>("incrementDouble", increment);
+    std::cout << lua.executeCode<int>("return 1 + 2") << std::endl;     // prints 3
+
+A `SyntaxErrorException` is thrown in case of a parse error in the code. An `ExecutionErrorException` is thrown in case of an unhandled Lua error during execution.
+
+`executeCode` also accepts `std::istream` objects. You can easily read lua code (including pre-compiled) from a file like this:
+
+    LuaContext lua;
+    lua.executeCode(std::ifstream{"script.lua"});
+
+If you write your own derivate of `std::istream` (for example a decompressor), you can of course also use it.
+Note however that `executeCode` will block until it reaches eof. You should remember this if you use a custom derivate of `std::istream` which awaits for data.
+
+
+#### Exception safety
+
+You can safely throw exceptions from inside functions called by Lua and they will be turned automatically into Lua errors.
+
+If the error is not handled by the Lua code, then it will propagate outside of `executeCode`. An `ExecutionErrorException` will be thrown by `executeCode` with the exception thrown by the callback attached as a nested exception.
     
-Using `writeFunction` is both easier and faster than `writeVariable` in case of function objects, and you should prefer this method.
+    lua.writeFunction("test", []() { throw std::runtime_error("Problem"); });
+    
+    try {
+        lua.executeCode("test()");
+    } catch(...) {
+        ...
+    }
+
 
 #### Writing custom types
 
     class Object {
     public:
-     Object() : value(10) {}
-     
-     void  increment() { std::cout << "incrementing" << std::endl; value++; } 
-     
-     int value;
+      Object() : value(10) {}
+      
+      void increment() { std::cout << "incrementing" << std::endl; value++; } 
+      
+      int value;
     };
     
     LuaContext lua;
@@ -122,36 +158,19 @@ Using `writeFunction` is both easier and faster than `writeVariable` in case of 
 
 Prints `incrementing` and `11`.
 
-In addition to basic types and functions, you can also pass any object to `writeVariable`.
-The object will then be moved into Lua by calling its copy or move constructor. Remember that since they are not a native type, attempting to copy the object into another variable using Lua code will instead make the two variables point to the same object.
+In addition to basic types and functions, you can also pass any object to `writeVariable`. The object will be moved into Lua by calling its copy or move constructor.
+
+Remember that since they are not a native type, you can't clone an object from within Lua. Attempting to copy the object into another variable will instead make the two variables point to the same object.
 
 If you want to call an object's member function, you must register it with `registerFunction`, just like in the example above.
 It doesn't matter whether you call `registerFunction` before or after writing the objects, it works in both cases.
 
 If you pass a plain object type as template parameter to `readVariable` (for example `readVariable<Object>`, juste like in the code above), then it will read a copy of the object. However if you pass a reference (for example `readVariable<Object&>`), then a reference to the object held by Lua will be returned.
 
-You also have the possibility to write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported. Functions that have been registered for a type also work with these.
+You also have the possibility to write and read pointers instead of plain objects. Raw pointers, `unique_ptr`s and `shared_ptr`s are also supported (`unique_ptr`s can't be read for obvious reasons). Functions that have been registered for a type also work if you write pointers to this type.
 
 Note however that inheritance is not supported.
-You need to register all of a type's functions, even if you have already registered the functions of its parents. Also you can't write an object and attempt to read a reference to its parent type, this would trigger an exception.
-
-
-#### Reading lua code from a file
-
-    LuaContext lua;
-    lua.executeCode(std::ifstream{"script.lua"});
-
-This simple example shows that you can easily read lua code (including pre-compiled) from a file.
-
-If you write your own derivate of `std::istream` (for example a decompressor), you can of course also use it.
-Note however that `executeCode` will block until it reaches eof. You should remember this if you use a custom derivate of `std::istream` which awaits for data.
-
-The `executeCode` function can trigger either a `SyntaxErrorException` in case of a parse error, or a `ExecutionErrorException` in case of an unhandled Lua error during execution.
-
-If the code returns a value, you can also pass an additional template parameter to `executeCode`.
-
-    LuaContext lua;
-    std::cout << lua.executeCode<int>("return 1 + 2") << std::endl;     // prints 3
+You need to register all of a type's functions, even if you have already registered the functions of its parents. You can't write an object and attempt to read a reference to its parent type either, this would trigger an exception.
 
 
 #### Executing lua functions
@@ -178,8 +197,19 @@ If you want to read a value but don't know in advance whether it is of type A or
 
     LuaContext lua;
 
+    auto value = lua.readVariable<boost::variant<std::string, bool>>("value");
+
+    if (const auto strValue = boost::get<std::string>(&value))
+        ...
+    else if (const auto boolValue = boost::get<bool>(&value))
+        ...
+
+This can be used to create polymorphic functions, ie. functions that can take different types of arguments.
+
+    LuaContext lua;
+
     lua.writeFunction("foo", 
-        [](boost::variant<std::string,bool> value)
+        [](boost::variant<std::string, bool> value)
         {
             if (value.which() == 0) {
                 std::cout << "Value is a string: " << boost::get<std::string>(value);
@@ -189,12 +219,10 @@ If you want to read a value but don't know in advance whether it is of type A or
         }
     );
 
-    lua.executeCode("foo(\"hello\")");
-    lua.executeCode("foo(true)");
+    lua.executeCode("foo(\"hello\")");      // prints "Value is a string: hello"
+    lua.executeCode("foo(true)");           // prints "Value is a bool true"
 
-Prints `Value is a string: hello` and `Value is a bool: true`.
-
-See the documentation of [`boost::variant`](http://www.boost.org/doc/libs/release/doc/html/variant.html).
+See the documentation of [`boost::variant`](http://www.boost.org/doc/libs/release/doc/html/variant.html) for more informations.
 
 
 #### Variadic-like functions
@@ -233,13 +261,28 @@ This means that for example:
 This code will trigger a Lua error because the `foo` function requires at least two parameters.
 
 
-#### Handling lua arrays
+#### Writing and reading arrays
 
-`writeVariable` and `readVariable` support `std::vector` of `std::pair`s, `std::map` and `std::unordered_map`.
-This allows you to read and write arrays. Combined with `boost::variant`, this allows you to write real polymorphic arrays.
+`writeVariable` and `readVariable` can also read of write associative arrays in the form of `std::vector` of `std::pair`s, `std::map` and `std::unordered_map`. For `std::vector` which contains `std::pair`s, the first member of the pair is the key and the second member is the value.
 
-If you have a `std::vector` which contains `std::pair`s, it will be considered as an associative array, where the first member of the pair is the key and the second member is the value.
-    
+    LuaContext lua;
+
+    lua.writeVariable("a",
+        std::unordered_map<int, std::string>
+        {
+            { 12, "hello" },
+            { 794, "goodbye" },
+            { 4, "how are" },
+            { 40, "you" }
+        }
+    );
+
+    std::cout << lua.executeCode<std::string>("return a[40]") << std::endl;       // prints "you"
+
+Remember that Lua arrays start at offset 1. When you read a `std::map` from a table created in Lua like this `a = { 5, 12 }`, then the first key is 1.
+
+You can combine this with `boost::variant`, which allows you to write polymorphic arrays.
+
     LuaContext lua;
 
     lua.writeVariable("a",
@@ -253,26 +296,10 @@ If you have a `std::vector` which contains `std::pair`s, it will be considered a
         }
     );
 
-    std::cout << lua.executeCode<bool>("return a.test") << std::endl;
-    std::cout << lua.executeCode<float>("return a[2]") << std::endl;
+    std::cout << lua.executeCode<bool>("return a.test") << std::endl;       // prints "true"
+    std::cout << lua.executeCode<float>("return a[2]") << std::endl;        // prints "6.4"
 
-Prints `true` and `6.4`.
-
-Remember that Lua arrays start at offset 1. When you read a `std::map` from a table created in Lua like this `a = { 5, 12 }`, then the first key is 1.
-
-You can also use `readVariable` and `writeVariable` to directly read or write inside an array. Again, the first offset is 1.
-    
-    std::cout << lua.readVariable("a", "test") << std::endl;
-    std::cout << lua.readVariable("a", 2) << std::endl;
-    
-You can also write an empty array, like this:
-
-    LuaContext lua;
-    lua.writeVariable("a", LuaEmptyArray);
-    
-`LuaEmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array (note: the reason why it is not a member of `LuaContext` is because of programming issues).
-
-Remember that you can create recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
+Also note that you can create recursive variants, so you can read arrays which contain arrays which contain arrays, and so forth.
 
     typedef typename boost::make_recursive_variant
         <
@@ -288,7 +315,20 @@ Remember that you can create recursive variants, so you can read arrays which co
 
     lua.readVariable<AnyValue>("something");
 
-This `AnyValue` can store any lua value, except functions and custom objects.
+
+#### Writing and reading inside arrays
+
+You can also use `readVariable`, `writeVariable` and `writeFunction` to directly read or write inside an array. Again, remember that the first offset of a Lua array is 1.
+
+    std::cout << lua.readVariable<int>("a", "test") << std::endl;        // reads the offset "test" of the array "a"
+    std::cout << lua.writeVariable("a", 2, true) << std::endl;      // writes "true" at the offset "2" of the array "a"
+
+You can also write an empty array, like this:
+
+    LuaContext lua;
+    lua.writeVariable("a", LuaEmptyArray);
+    
+`LuaEmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array (note: the reason why it is not a member of `LuaContext` is because of programming issues).
 
 
 #### Metatables
@@ -418,20 +458,6 @@ The syntax is the same than above, except that the callbacks take an extra `name
     );
     
 Remember that you can return `std::function` from the read callback, allowing you to create real virtual objects.
-
-
-#### Exception safety
-
-You can safely throw exceptions from inside functions called by Lua.
-They will be turned into Lua errors, and if not handled they will be turned back into an exception and continue propagating.
-
-    lua.writeFunction("test", []() { throw std::runtime_error("Problem"); });
-    
-    try {
-        lua.executeCode("test()");
-    } catch(const std::runtime_error& e) {
-        std::cout << e.what() << std::endl;     // prints "Problem"
-    }
 
 
 ### Compilation
