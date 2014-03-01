@@ -2628,28 +2628,31 @@ public:
 private:
 	// class doing operations for a range of types from TIterBegin to TIterEnd
 	template<typename TIterBegin, typename TIterEnd, typename = void>
-	struct VariantReader {
+	struct VariantReader
+	{
+		using SubReader = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>;
+
 		static auto readSafe(const LuaContext& ctxt, int index)
 			-> ReturnType
 		{
-			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
-			if (val.is_initialized())
-				return ReturnType{std::move(val.get())};
+			// note: using SubReader::testRead triggers a compilation error when used with a reference
+			if (SubReader::test(ctxt, index))
+				return ReturnType{SubReader::read(ctxt, index)};
 			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::readSafe(ctxt, index);
 		}
 
 		static auto testRead(const LuaContext& ctxt, int index)
 			-> boost::optional<ReturnType>
 		{
-			auto val = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::testRead(ctxt, index);
-			if (val.is_initialized())
-				return ReturnType{std::move(val.get())};
+			// note: using SubReader::testRead triggers a compilation error when used with a reference
+			if (SubReader::test(ctxt, index))
+				return ReturnType{SubReader::read(ctxt, index)};
 			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::testRead(ctxt, index);
 		}
 		
 		static bool test(const LuaContext& ctxt, int index)
 		{
-			if (Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>::test(ctxt, index))
+			if (SubReader::test(ctxt, index))
 				return true;
 			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::test(ctxt, index);
 		}
