@@ -336,7 +336,7 @@ You can also write an empty array, like this:
     LuaContext lua;
     lua.writeVariable("a", LuaContext::EmptyArray);
     
-`LuaContext::EmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array.
+Trying to write `LuaContext::EmptyArray` in a Lua variable instead writes an empty array.
 
 
 #### Metatables
