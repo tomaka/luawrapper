@@ -1,3 +1,16 @@
+Version 1.2
+=============
+Major:
+ * Added support for metatables
+ * Fixed bug with ref and const-ref callback parameters
+ * Fixed exceptions not being thrown by writeVariable with Lua 5.2
+ * Fixed exception-safety when callbacks throw exceptions
+
+Minor:
+ * Changed LuaEmptyArray to LuaContext::EmptyArray and LuaMetatable to LuaContext::Metatable (former definitions are working but deprecated)
+ * Fixed custom object being copied instead of moved when being returned by a callback
+ * Fixed bug when reading arrays from boost::variant
+
 Version 1.1
 =============
 Major:
