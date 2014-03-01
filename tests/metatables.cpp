@@ -7,8 +7,8 @@ TEST(Metatables, WritingMetatable)
 
 	bool called = false;
 
-	context.writeVariable("foo", LuaEmptyArray);
-	context.writeFunction("foo", LuaMetatable, "__call", [&](const std::vector<std::pair<int, int>>&) { called = true; });
+	context.writeVariable("foo", LuaContext::EmptyArray);
+	context.writeFunction("foo", LuaContext::Metatable, "__call", [&](const std::vector<std::pair<int, int>>&) { called = true; });
 	EXPECT_EQ("table", context.executeCode<std::string>("return type(getmetatable(foo))"));
 
 	context.executeCode("foo()");
@@ -19,8 +19,8 @@ TEST(Metatables, ReadingMetatable)
 {
 	LuaContext context;
 
-	context.writeVariable("foo", LuaEmptyArray);
-	context.writeVariable("foo", LuaMetatable, "x", 18);
+	context.writeVariable("foo", LuaContext::EmptyArray);
+	context.writeVariable("foo", LuaContext::Metatable, "x", 18);
 	
 	EXPECT_EQ(18, context.executeCode<int>("return getmetatable(foo).x"));
 	EXPECT_EQ(18, context.readVariable<int>("foo", LuaMetatable, "x"));
@@ -33,8 +33,8 @@ TEST(Metatables, WritingMetatableObjects)
 	LuaContext context;
 
 	context.writeVariable("foo", Foo{});
-	context.writeFunction("foo", LuaMetatable, "__call", [](Foo& foo) { foo.value++; });
-	context.writeFunction("foo", LuaMetatable, "__index", [](Foo& foo, std::string index) -> int { foo.value += index.length(); return 12; });
+	context.writeFunction("foo", LuaContext::Metatable, "__call", [](Foo& foo) { foo.value++; });
+	context.writeFunction("foo", LuaContext::Metatable, "__index", [](Foo& foo, std::string index) -> int { foo.value += index.length(); return 12; });
 
 	context.executeCode("foo()");
 	EXPECT_EQ(12, context.executeCode<int>("return foo.test"));

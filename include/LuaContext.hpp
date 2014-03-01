@@ -187,12 +187,12 @@ public:
 	/**
 	 * Type that is considered as an empty array
 	 */
-	struct EmptyArray_t {};
+	enum EmptyArray_t { EmptyArray };
 
 	/**
 	 * Type for a metatable
 	 */
-	struct Metatable_t {};
+	enum Metatable_t { Metatable };
 
 	/**
 	 * Executes lua code from the stream
@@ -1373,8 +1373,10 @@ private:
 	struct IsOptional : public std::false_type {};
 };
 
+/// @deprecated
 static LuaContext::EmptyArray_t
 	LuaEmptyArray {};
+/// @deprecated
 static LuaContext::Metatable_t
 	LuaMetatable {};
 	

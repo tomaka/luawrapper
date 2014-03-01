@@ -30,14 +30,14 @@ TEST(AdvancedReadWrite, ReadingOptional) {
 	LuaContext context;
 	
     context.writeVariable("a", 3);
-	EXPECT_EQ(3, context.readVariable<boost::optional<int>>("a"));
-	EXPECT_EQ(boost::optional<int>{}, context.readVariable<boost::optional<int>>("b"));
+	EXPECT_EQ(3, context.readVariable<boost::optional<int>>("a").get());
+	EXPECT_FALSE(context.readVariable<boost::optional<int>>("b").is_initialized());
 }
 
 TEST(AdvancedReadWrite, EmptyArray) {
 	LuaContext context;
 
-	context.writeVariable("a", LuaEmptyArray);
+	context.writeVariable("a", LuaContext::EmptyArray);
 	EXPECT_EQ("table", context.executeCode<std::string>("return type(a)"));
 }
 

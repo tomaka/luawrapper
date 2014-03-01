@@ -37,6 +37,18 @@ TEST(FunctionsWrite, ConstRefParameters)
 	EXPECT_EQ(4, context.executeCode<int>("return f('test')"));
 }
 
+/*TEST(FunctionsWrite, VariantParameters)
+{
+	LuaContext context;
+
+	struct Foo {};
+	context.writeVariable("foo", Foo{});
+	context.writeFunction("f", [](const boost::variant<int, Foo&>& val) { return val.which(); });
+
+	EXPECT_EQ(1, context.executeCode<int>("return f(foo)"));
+	EXPECT_EQ(0, context.executeCode<int>("return f(3)"));
+}*/
+
 TEST(FunctionsWrite, FunctionObjects) {
 	struct Foo {
 		int operator()(int x) {

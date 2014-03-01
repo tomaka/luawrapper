@@ -334,21 +334,21 @@ You can also use `readVariable`, `writeVariable` and `writeFunction` to directly
 You can also write an empty array, like this:
 
     LuaContext lua;
-    lua.writeVariable("a", LuaEmptyArray);
+    lua.writeVariable("a", LuaContext::EmptyArray);
     
-`LuaEmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array (note: the reason why it is not a member of `LuaContext` is because of programming issues).
+`LuaContext::EmptyArray` is a global variable, and trying to write its value in a Lua variable instead writes an empty array (note: the reason why it is not a member of `LuaContext` is because of programming issues).
 
 
 #### Metatables
 
-You can read or write the metatable of an object with `readVariable`, `writeVariable` or `writeFunction` as if it was an array, using the special `LuaMetatable` index.
+You can read or write the metatable of an object with `readVariable`, `writeVariable` or `writeFunction` as if it was an array, using the special `LuaContext::Metatable` index.
 The metatable is automatically created if it doesn't exist.
 
     struct Foo {};
     
     LuaContext lua;
     lua.writeVariable("foo", Foo{});
-    lua.writeFunction("foo", LuaMetatable, "__call", [](Foo&) {  });
+    lua.writeFunction("foo", LuaContext::Metatable, "__call", [](Foo&) {  });
     lua.executeCode("foo()");   // calls the lambda above
 
 Note that functions and custom objects written by this library work thanks to their metatable.
