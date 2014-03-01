@@ -1855,10 +1855,10 @@ private:
 			return lua_error(state);
 		}
 
-		boost::optional<typename Reader<std::tuple<TParameters...>>::ReturnType> parameters;
+		std::unique_ptr<typename Reader<std::tuple<TParameters...>>::ReturnType> parameters;
 		// reading parameters from the stack
 		try {
-			parameters = Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount, argumentsCount);
+			parameters.reset(new typename Reader<std::tuple<TParameters...>>::ReturnType(Reader<std::tuple<TParameters...>>::readSafe(*me, -argumentsCount, argumentsCount)));
 
 		} catch (const WrongTypeException& ex) {
 			// wrong parameter type, using lua_error to return an error

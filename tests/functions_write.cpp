@@ -37,7 +37,7 @@ TEST(FunctionsWrite, ConstRefParameters)
 	EXPECT_EQ(4, context.executeCode<int>("return f('test')"));
 }
 
-/*TEST(FunctionsWrite, VariantParameters)
+TEST(FunctionsWrite, VariantParameters)
 {
 	LuaContext context;
 
@@ -47,7 +47,7 @@ TEST(FunctionsWrite, ConstRefParameters)
 
 	EXPECT_EQ(1, context.executeCode<int>("return f(foo)"));
 	EXPECT_EQ(0, context.executeCode<int>("return f(3)"));
-}*/
+}
 
 TEST(FunctionsWrite, FunctionObjects) {
 	struct Foo {
