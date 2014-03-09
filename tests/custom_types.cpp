@@ -59,7 +59,7 @@ TEST(CustomTypes, ConstVolatileMemberFunctions) {
     EXPECT_EQ(4, context.executeCode<int>("return obj:fooCV()"));
 }
 
-TEST(CustomTypes, Members) {
+TEST(CustomTypes, MembersPlain) {
 	struct Object {
 		int value;
     };
@@ -71,6 +71,37 @@ TEST(CustomTypes, Members) {
     context.executeCode("obj.value = obj.value + 5");
 
 	EXPECT_EQ(15, context.readVariable<Object>("obj").value);
+}
+
+TEST(CustomTypes, MembersPointers) {
+	struct Object {
+		int value;
+    };
+    
+    LuaContext context;
+    context.registerMember("value", &Object::value);
+    
+	Object obj{10};
+    context.writeVariable("obj", &obj);
+    context.executeCode("obj.value = obj.value + 5");
+
+	EXPECT_EQ(15, obj.value);
+}
+
+TEST(CustomTypes, MembersSharedPointers) {
+	struct Object {
+		int value;
+    };
+    
+    LuaContext context;
+    context.registerMember("value", &Object::value);
+    
+	auto obj = std::make_shared<Object>();
+	obj->value = 10;
+    context.writeVariable("obj", obj);
+    context.executeCode("obj.value = obj.value + 5");
+
+	EXPECT_EQ(15, obj->value);
 }
 
 TEST(CustomTypes, CustomMemberFunctions) {
@@ -94,6 +125,7 @@ TEST(CustomTypes, CustomMemberFunctions) {
 
 	EXPECT_EQ(11, context.readVariable<Object>("obj1").value);
 	EXPECT_EQ(11, context.readVariable<Object*>("obj2")->value);
+	EXPECT_EQ(11, obj.value);
 	EXPECT_EQ(11, context.readVariable<std::shared_ptr<Object>>("obj3")->value);
 
 	EXPECT_EQ(14, context.executeCode<int>("return obj1:add(3)"));

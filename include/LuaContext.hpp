@@ -826,8 +826,20 @@ private:
 		static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerMember can only be called on a class or a pointer");
 		
 		checkTypeRegistration(&typeid(TObject));
-		setTable<LUA_REGISTRYINDEX,TVarType (TObject const&)>(&typeid(TObject), 1, name, [readFunction](TObject const& object) {
+		setTable<LUA_REGISTRYINDEX, TVarType (TObject&)>(&typeid(TObject), 1, name, [readFunction](TObject const& object) {
 			return readFunction(object);
+		});
+		
+		checkTypeRegistration(&typeid(TObject*));
+		setTable<LUA_REGISTRYINDEX, TVarType (TObject*)>(&typeid(TObject*), 1, name, [readFunction](TObject const* object) {
+			assert(object);
+			return readFunction(*object);
+		});
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject>));
+		setTable<LUA_REGISTRYINDEX, TVarType (std::shared_ptr<TObject>)>(&typeid(std::shared_ptr<TObject>), 1, name, [readFunction](const std::shared_ptr<TObject const>& object) {
+			assert(object);
+			return readFunction(*object);
 		});
 	}
 
@@ -835,8 +847,19 @@ private:
 	void registerMemberImpl(const std::string& name, TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(name, readFunction);
-		setTable<LUA_REGISTRYINDEX,void (TObject&,TVarType)>(&typeid(TObject), 4, name, [writeFunction](TObject& object, const TVarType& value) {
+
+		setTable<LUA_REGISTRYINDEX, void (TObject&, TVarType)>(&typeid(TObject), 4, name, [writeFunction](TObject& object, const TVarType& value) {
 			writeFunction(object, value);
+		});
+		
+		setTable<LUA_REGISTRYINDEX, void (TObject*, TVarType)>(&typeid(TObject*), 4, name, [writeFunction](TObject* object, const TVarType& value) {
+			assert(object);
+			writeFunction(*object, value);
+		});
+		
+		setTable<LUA_REGISTRYINDEX, void (std::shared_ptr<TObject>, TVarType)>(&typeid(std::shared_ptr<TObject>), 4, name, [writeFunction](std::shared_ptr<TObject> object, const TVarType& value) {
+			assert(object);
+			writeFunction(*object, value);
 		});
 	}
 
