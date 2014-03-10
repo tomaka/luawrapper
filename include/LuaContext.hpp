@@ -797,6 +797,18 @@ private:
 		checkTypeRegistration(&typeid(std::shared_ptr<TObject>));
 		setTable<LUA_REGISTRYINDEX,TRetValue(std::shared_ptr<TObject>, TOtherParams...)>(&typeid(std::shared_ptr<TObject>), 0, functionName, [=](const std::shared_ptr<TObject>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
 	}
+	
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<const TObject>, tag<TRetValue (TOtherParams...)> fTypeTag)
+	{
+		registerFunctionImpl(functionName, function, tag<TObject>{}, fTypeTag);
+
+		checkTypeRegistration(&typeid(TObject const*));
+		setTable<LUA_REGISTRYINDEX,TRetValue(TObject const*, TOtherParams...)>(&typeid(TObject const*), 0, functionName, [=](TObject const* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject const>));
+		setTable<LUA_REGISTRYINDEX,TRetValue(std::shared_ptr<TObject const>, TOtherParams...)>(&typeid(std::shared_ptr<TObject const>), 0, functionName, [=](const std::shared_ptr<TObject const>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
 	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...)>)
@@ -805,18 +817,21 @@ private:
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
-	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const>) {
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...) const>)
+	{
+		registerFunctionImpl(functionName, std::move(function), tag<const TObject>{}, tag<TRetValue (TOtherParams...)>{});
+	}
+
+	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...) volatile>)
+	{
 		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
-	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) volatile>) {
-		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
-	}
-
-	template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
-	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue(TObject::*)(TOtherParams...) const volatile>) {
-		registerFunctionImpl(functionName, std::move(function), tag<TObject>{}, tag<TRetValue (TOtherParams...)>{});
+	void registerFunctionImpl(const std::string& functionName, TFunctionType function, tag<TRetValue (TObject::*)(TOtherParams...) const volatile>)
+	{
+		registerFunctionImpl(functionName, std::move(function), tag<const TObject>{}, tag<TRetValue (TOtherParams...)>{});
 	}
 
 	// the "registerMember" public functions call this one
@@ -836,8 +851,20 @@ private:
 			return readFunction(*object);
 		});
 		
+		checkTypeRegistration(&typeid(TObject const*));
+		setTable<LUA_REGISTRYINDEX, TVarType (TObject const*)>(&typeid(TObject const*), 1, name, [readFunction](TObject const* object) {
+			assert(object);
+			return readFunction(*object);
+		});
+		
 		checkTypeRegistration(&typeid(std::shared_ptr<TObject>));
-		setTable<LUA_REGISTRYINDEX, TVarType (std::shared_ptr<TObject>)>(&typeid(std::shared_ptr<TObject>), 1, name, [readFunction](const std::shared_ptr<TObject const>& object) {
+		setTable<LUA_REGISTRYINDEX, TVarType (std::shared_ptr<TObject>)>(&typeid(std::shared_ptr<TObject>), 1, name, [readFunction](const std::shared_ptr<TObject>& object) {
+			assert(object);
+			return readFunction(*object);
+		});
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject const>));
+		setTable<LUA_REGISTRYINDEX, TVarType (std::shared_ptr<TObject const>)>(&typeid(std::shared_ptr<TObject const>), 1, name, [readFunction](const std::shared_ptr<TObject const>& object) {
 			assert(object);
 			return readFunction(*object);
 		});
@@ -883,14 +910,49 @@ private:
 		setTable<LUA_REGISTRYINDEX,TVarType (TObject const&, std::string)>(&typeid(TObject), 2, [readFunction](TObject const& object, const std::string& name) {
 			return readFunction(object, name);
 		});
+		
+		checkTypeRegistration(&typeid(TObject*));
+		setTable<LUA_REGISTRYINDEX,TVarType (TObject*, std::string)>(&typeid(TObject*), 2, [readFunction](TObject const* object, const std::string& name) {
+			assert(object);
+			return readFunction(*object, name);
+		});
+		
+		checkTypeRegistration(&typeid(TObject const*));
+		setTable<LUA_REGISTRYINDEX,TVarType (TObject const*, std::string)>(&typeid(TObject const*), 2, [readFunction](TObject const* object, const std::string& name) {
+			assert(object);
+			return readFunction(*object, name);
+		});
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject>));
+		setTable<LUA_REGISTRYINDEX,TVarType (std::shared_ptr<TObject>, std::string)>(&typeid(std::shared_ptr<TObject>), 2, [readFunction](const std::shared_ptr<TObject>& object, const std::string& name) {
+			assert(object);
+			return readFunction(*object, name);
+		});
+		
+		checkTypeRegistration(&typeid(std::shared_ptr<TObject const>));
+		setTable<LUA_REGISTRYINDEX,TVarType (std::shared_ptr<TObject const>, std::string)>(&typeid(std::shared_ptr<TObject const>), 2, [readFunction](const std::shared_ptr<TObject const>& object, const std::string& name) {
+			assert(object);
+			return readFunction(*object, name);
+		});
 	}
 
 	template<typename TObject, typename TVarType, typename TReadFunction, typename TWriteFunction>
 	void registerMemberImpl(TReadFunction readFunction, TWriteFunction writeFunction)
 	{
 		registerMemberImpl<TObject,TVarType>(readFunction);
-		setTable<LUA_REGISTRYINDEX,void (TObject&, std::string, TVarType)>(&typeid(TObject), 5, [writeFunction](TObject& object, const std::string& name, const TVarType& value) {
+
+		setTable<LUA_REGISTRYINDEX, void (TObject&, std::string, TVarType)>(&typeid(TObject), 5, [writeFunction](TObject& object, const std::string& name, const TVarType& value) {
 			writeFunction(object, name, value);
+		});
+		
+		setTable<LUA_REGISTRYINDEX, void (TObject*, std::string, TVarType)>(&typeid(TObject*), 2, [writeFunction](TObject* object, const std::string& name, const TVarType& value) {
+			assert(object);
+			writeFunction(*object, name, value);
+		});
+		
+		setTable<LUA_REGISTRYINDEX, void (std::shared_ptr<TObject>, std::string, TVarType)>(&typeid(std::shared_ptr<TObject>), 2, [writeFunction](const std::shared_ptr<TObject>& object, const std::string& name, const TVarType& value) {
+			assert(object);
+			writeFunction(*object, name, value);
 		});
 	}
 

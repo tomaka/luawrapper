@@ -37,6 +37,46 @@ TEST(CustomTypes, MemberFunctions) {
 	EXPECT_EQ(11, context.readVariable<Object>("obj").value);
 }
 
+TEST(CustomTypes, ConstMemberFunctionsWithRawPointers) {
+	struct Object {
+		int foo() { return 1; }
+		int fooC() const { return 2; }
+    };
+    
+    LuaContext context;
+    context.registerFunction("foo", &Object::foo);
+    context.registerFunction("fooC", &Object::fooC);
+    
+	Object obj;
+    context.writeVariable("obj", &obj);
+    context.writeVariable("objC", const_cast<Object const*>(&obj));
+
+    EXPECT_EQ(2, context.executeCode<int>("return obj:fooC()"));
+    EXPECT_EQ(1, context.executeCode<int>("return obj:foo()"));
+    EXPECT_EQ(2, context.executeCode<int>("return objC:fooC()"));
+    EXPECT_ANY_THROW(context.executeCode<int>("return objC:foo()"));
+}
+
+TEST(CustomTypes, ConstMemberFunctionsWithSharedPointers) {
+	struct Object {
+		int foo() { return 1; }
+		int fooC() const { return 2; }
+    };
+    
+    LuaContext context;
+    context.registerFunction("foo", &Object::foo);
+    context.registerFunction("fooC", &Object::fooC);
+    
+	auto obj = std::make_shared<Object>();
+    context.writeVariable("obj", obj);
+    context.writeVariable("objC", std::shared_ptr<const Object>(obj));
+
+    EXPECT_EQ(2, context.executeCode<int>("return obj:fooC()"));
+    EXPECT_EQ(1, context.executeCode<int>("return obj:foo()"));
+    EXPECT_EQ(2, context.executeCode<int>("return objC:fooC()"));
+    EXPECT_ANY_THROW(context.executeCode<int>("return objC:foo()"));
+}
+
 TEST(CustomTypes, ConstVolatileMemberFunctions) {
 	struct Object {
 		int foo() { return 1; }
