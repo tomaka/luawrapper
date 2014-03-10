@@ -1,3 +1,8 @@
+Version 1.2.1
+=============
+ * Fixed members registration not working with pointers and shared pointers to objects
+ * Enforced const-correctness: a pointer or a shared pointer to a const object will now only have access to reading members and calling const functions
+
 Version 1.2
 =============
 Major:
