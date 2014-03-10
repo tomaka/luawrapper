@@ -597,7 +597,7 @@ private:
 	//    it is available for everything that needs it and its offset is at &typeid(LuaContext)
 	//  - registered members and functions are stored in tables at offset &typeid(type) of the registry
 	//    each table has its getter functions at offset 0, getter members at offset 1, default getter at offset 2
-	//	  setter functions at offste 3, setter members at offset 4, default setter at offset 5
+	//	  offset 3 is unused, setter members at offset 4, default setter at offset 5
 	lua_State*					mState;
 	
 
@@ -1181,7 +1181,7 @@ private:
 			// this function will be stored in __newindex in the metatable
 			const auto newIndexFunction = [](lua_State* lua) -> int {
 				lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(LuaContext)));
-				lua_gettable(lua, LUA_REGISTRYINDEX);
+				lua_rawget(lua, LUA_REGISTRYINDEX);
 				const auto me = static_cast<LuaContext*>(lua_touserdata(lua, -1));
 				lua_pop(lua, 1);
 
@@ -1191,41 +1191,38 @@ private:
 
 					// searching for a handler
 					lua_pushlightuserdata(lua, const_cast<std::type_info*>(&typeid(TType)));
-					lua_gettable(lua, LUA_REGISTRYINDEX);
+					lua_rawget(lua, LUA_REGISTRYINDEX);
 					assert(!lua_isnil(lua, -1));
-					
-					// looking into setter functions
-					lua_pushinteger(lua, 3);
-					lua_gettable(lua, -2);
-					lua_pushvalue(lua, 2);
-					lua_gettable(lua, -2);
-					if (!lua_isnil(lua, -1))
-						return 1;
-					lua_pop(lua, 2);
 					
 					// looking into setter members
 					lua_pushinteger(lua, 4);
-					lua_gettable(lua, -2);
+					lua_rawget(lua, -2);
 					lua_pushvalue(lua, 2);
-					lua_gettable(lua, -2);
+					lua_rawget(lua, -2);
 					if (!lua_isnil(lua, -1)) {
 						lua_pushvalue(lua, 1);
 						lua_pushvalue(lua, 3);
-						me->callRaw(2, 1);
-						return 1;
+						me->callRaw(2, 0);
+						lua_pop(lua, 2);
+						return 0;
 					}
 					lua_pop(lua, 2);
 
 					// looking into default setter
 					lua_pushinteger(lua, 5);
-					lua_gettable(lua, -2);
+					lua_rawget(lua, -2);
 					if (lua_isnil(lua, -1))
-						return 1;
+					{
+						lua_pop(lua, 2);
+						Pusher<const char*>::push(*me, "No setter found");
+						return lua_error(lua);
+					}
 					lua_pushvalue(lua, 1);
 					lua_pushvalue(lua, 2);
 					lua_pushvalue(lua, 3);
-					me->callRaw(3, 1);
-					return 1;
+					me->callRaw(3, 0);
+					lua_pop(lua, 1);
+					return 0;
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(*me, std::current_exception());

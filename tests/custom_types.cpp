@@ -124,8 +124,11 @@ TEST(CustomTypes, MembersPointers) {
 	Object obj{10};
     context.writeVariable("obj", &obj);
     context.executeCode("obj.value = obj.value + 5");
-
 	EXPECT_EQ(15, obj.value);
+	
+    context.writeVariable("obj2", const_cast<Object const*>(&obj));
+	EXPECT_EQ(15, context.executeCode<int>("return obj2.value"));
+	EXPECT_ANY_THROW(context.executeCode("obj2.value = 12"));
 }
 
 TEST(CustomTypes, MembersSharedPointers) {
@@ -140,8 +143,11 @@ TEST(CustomTypes, MembersSharedPointers) {
 	obj->value = 10;
     context.writeVariable("obj", obj);
     context.executeCode("obj.value = obj.value + 5");
-
 	EXPECT_EQ(15, obj->value);
+	
+    context.writeVariable("obj2", std::shared_ptr<Object const>(obj));
+	EXPECT_EQ(15, context.executeCode<int>("return obj2.value"));
+	EXPECT_ANY_THROW(context.executeCode("obj2.value = 12"));
 }
 
 TEST(CustomTypes, CustomMemberFunctions) {
