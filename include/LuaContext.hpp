@@ -1214,7 +1214,7 @@ private:
 					if (lua_isnil(lua, -1))
 					{
 						lua_pop(lua, 2);
-						Pusher<const char*>::push(*me, "No setter found");
+						lua_pushstring(lua, "No setter found");
 						return lua_error(lua);
 					}
 					lua_pushvalue(lua, 1);
