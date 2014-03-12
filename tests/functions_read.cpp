@@ -52,3 +52,20 @@ TEST(FunctionsRead, LuaFunctionsCleanup) {
 	context.writeVariable("f", nullptr);
 	EXPECT_EQ(4, f(3));
 }
+
+TEST(FunctionsRead, CallLuaFunctionFromWithinCallback) {
+	LuaContext context;
+	
+	context.writeFunction("execute", [&](const std::string& varName) {
+		const auto f = context.readVariable<std::function<int()>>(varName);
+		EXPECT_EQ(5, f());
+	});
+
+	context.executeCode(R"(
+		function test()
+			return 5
+		end
+		
+		execute("test")
+	)");
+}

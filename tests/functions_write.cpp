@@ -195,3 +195,13 @@ TEST(FunctionsWrite, VariadicFunctions) {
 	EXPECT_EQ(3, context.executeCode<int>("return g(10, 20, 30)"));
 	EXPECT_THROW(context.executeCode<int>("return g(12, 24)"), LuaContext::ExecutionErrorException);
 }
+
+TEST(FunctionsWrite, AccessLuaFromWithinCallback) {
+	LuaContext context;
+	
+	context.writeFunction("read", [&](const std::string& varName) {
+		EXPECT_EQ(5, context.readVariable<int>(varName));
+	});
+
+	context.executeCode("x = 5; read(\"x\");");
+}
