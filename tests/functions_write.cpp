@@ -205,3 +205,15 @@ TEST(FunctionsWrite, AccessLuaFromWithinCallback) {
 
 	context.executeCode("x = 5; read(\"x\");");
 }
+
+TEST(FunctionsWrite, ExecuteLuaFromWithinCallback) {
+	LuaContext context;
+	
+	context.writeFunction("exec", [&](const std::string& varName) {
+		EXPECT_EQ("x", varName);
+		context.executeCode("x = 10");
+		EXPECT_EQ(10, context.readVariable<int>(varName));
+	});
+
+	context.executeCode("exec(\"x\")");
+}
