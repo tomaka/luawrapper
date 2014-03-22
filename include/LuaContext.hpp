@@ -763,6 +763,12 @@ private:
 		}
 	}
 
+	template<int TTableIndex, typename TDataType, typename... TIndices>
+	static void setTable(lua_State* state, const ThreadID& thread, TIndices&&... indices)
+	{
+		setTable<-1,TDataType>(thread.state, std::forward<TIndices>(indices)...);
+	}
+
 	// simple function that reads the "nb" first top elements of the stack, pops them, and returns the value
 	// warning: first parameter is the number of parameters, not the parameter index
 	// if read generates an exception, stack is poped anyway
