@@ -448,40 +448,6 @@ public:
 	}
 	
 	/**
-	 * Returns true if the value of the variable is an array
-	 * @param variableName Name of the variable to check
-	 * @deprecated
-	 */
-	bool isVariableArray(const std::string& variableName) const
-	{
-		return isVariableArray(variableName.c_str());
-	}
-
-	/**
-	 * @sa isVariableArray
-	 * @deprecated
-	 */
-	bool isVariableArray(const char* variableName) const
-	{
-		lua_getglobal(mState, variableName);
-		bool answer = lua_istable(mState, -1);
-		lua_pop(mState, 1);
-		return answer;
-	}
-	
-	/**
-	 * Returns true if variable exists (ie. not nil)
-	 * @deprecated
-	 */
-	bool hasVariable(const std::string& variableName) const	
-	{
-		lua_getglobal(mState, variableName.c_str());
-		bool answer = lua_isnil(mState, -1);
-		lua_pop(mState, 1);
-		return !answer;
-	}
-
-	/**
 	 * Reads the content of a Lua variable
 	 * 
 	 * @tparam TType				Type requested for the read
