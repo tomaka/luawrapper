@@ -68,7 +68,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * it wants. These arguments may only be of basic types (int, float, etc.) or std::string.
  */
 class LuaContext {
+	template<int...>
+	struct Sequence {};
 public:
+
 	/**
 	 * @param openDefaultLibs True if luaL_openlibs should be called
 	 */
@@ -174,6 +177,97 @@ public:
 		
 		std::string luaType;
 		const std::type_info& destination;
+	};
+
+	/**
+	 * 
+	 */
+	template<typename... TPathTypes>
+	class VariableAccessor {
+		friend LuaContext;
+		explicit VariableAccessor(LuaContext* lua, std::tuple<TPathTypes...> values) : mLua(lua), mPath(std::move(values)) {}
+
+	public:
+		VariableAccessor(VariableAccessor&&) = default;
+		VariableAccessor& operator=(VariableAccessor&&) = default;
+		VariableAccessor(const VariableAccessor&) = default;
+		VariableAccessor& operator=(const VariableAccessor&) = default;
+
+		template<typename T>
+		using SubAccessor = VariableAccessor<TPathTypes..., typename std::decay<T>::type>;
+
+		template<typename T>
+		operator T() const
+		{
+			return to<T>();
+		}
+		
+		template<typename T>
+		T to() const
+		{
+			return to<T>(typename LuaContext::GenerateSequence<sizeof...(TPathTypes)>::type());
+		}
+
+		template<typename TType>
+		auto operator=(TType&& value) const &
+			-> VariableAccessor const&
+		{
+			set(std::forward<TType>(value));
+			return *this;
+		}
+
+		template<typename TType>
+		auto operator=(TType&& value) &&
+			-> VariableAccessor&&
+		{
+			set(std::forward<TType>(value));
+			return std::move(*this);
+		}
+
+		template<typename TType>
+		auto operator[](TType&& value) const &
+			-> SubAccessor<TType>
+		{
+			return SubAccessor<TType>(mLua, std::tuple_cat(mPath, std::make_tuple(std::forward<TType>(value))));
+		}
+
+		template<typename TType>
+		auto operator[](TType&& value) &&
+			-> SubAccessor<TType>
+		{
+			return SubAccessor<TType>(mLua, std::tuple_cat(std::move(mPath), std::make_tuple(std::forward<TType>(value))));
+		}
+
+		template<typename TRetValue, typename... TParams>
+		TRetValue call(const TParams&... params) const
+		{
+			return to<std::function<TRetValue (TParams...)>>()();
+		}
+
+		template<typename... TParams>
+		void call(const TParams&... params) const
+		{
+			to<std::function<void (TParams...)>>()();
+		}
+		
+		template<typename... TParams>
+		void operator()(const TParams&... params) const
+		{
+			to<std::function<void (TParams...)>>()();
+		}
+
+	private:
+		LuaContext*												mLua;
+		std::tuple<typename std::decay<TPathTypes>::type...>	mPath;
+
+	private:
+		template<typename T, int... Seq>
+		T to(LuaContext::Sequence<Seq...>) const { return mLua->readVariable<T>(std::get<Seq>(mPath)...); }
+		
+		template<typename TType>
+		void set(TType&& value) const { return set(std::forward<TType>(value), typename LuaContext::GenerateSequence<sizeof...(TPathTypes)>::type()); }
+		template<typename TType, int... Seq>
+		void set(TType&& value, LuaContext::Sequence<Seq...>) const { mLua->writeVariable(std::get<Seq>(mPath)..., std::forward<TType>(value)); }
 	};
 
 	/**
@@ -445,6 +539,17 @@ public:
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
 		registerMemberImpl(tag<TMemberType>{}, std::move(readFunction));
+	}
+
+	/**
+	 * 
+	 */
+	template<typename TType>
+	auto operator[](TType&& arg)
+		-> VariableAccessor<typename std::decay<TType>::type>
+	{
+		using DecayedType = typename std::decay<TType>::type;
+		return VariableAccessor<DecayedType>(this, std::tuple<DecayedType>(std::forward<TType>(arg)));
 	}
 	
 	/**
@@ -1269,8 +1374,6 @@ private:
 	// this is a bit of template meta-programming hack
 	// the only interesting element here is "callWithTuple" which calls a function using parameters passed as a tuple
 	// note that it either returns std::tuple<TrueReturnType> or std::tuple<> instead of void
-	template<int...>
-	struct Sequence {};
 	template<typename Sequence>
 	struct IncrementSequence {};
 	template<int N>

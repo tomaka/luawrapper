@@ -42,6 +42,7 @@ endif()
 # executable
 add_executable(tests
 	tests/main.cpp
+	tests/accessors.cpp
 	tests/basic_readwrite.cpp
 	tests/advanced_readwrite.cpp
 	tests/execution.cpp
