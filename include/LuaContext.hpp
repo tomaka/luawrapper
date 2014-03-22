@@ -208,6 +208,22 @@ public:
 			return to<T>(typename LuaContext::GenerateSequence<sizeof...(TPathTypes)>::type());
 		}
 
+		template<typename T>
+		bool operator==(const T& other) const
+		{
+			return to<T>() == other;
+		}
+
+		bool operator==(const VariableAccessor&) const = delete;
+
+		template<typename T>
+		bool operator!=(const T& other) const
+		{
+			return to<T>() != other;
+		}
+
+		bool operator!=(const VariableAccessor&) const = delete;
+
 		template<typename TType>
 		auto operator=(TType&& value) const &
 			-> VariableAccessor const&
