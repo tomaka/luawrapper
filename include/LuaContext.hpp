@@ -207,7 +207,7 @@ public:
 	 */
 	void executeCode(std::istream& code)
 	{
-		load(code);
+		load(mState, code);
 		call<std::tuple<>>(mState);
 	}
 
@@ -220,7 +220,7 @@ public:
 	auto executeCode(std::istream& code)
 		-> TType
 	{
-		load(code);
+		load(mState, code);
 		return call<TType>(mState);
 	}
 
@@ -251,7 +251,7 @@ public:
 	 */
 	void executeCode(const char* code)
 	{
-		load(code);
+		load(mState, code);
 		call<std::tuple<>>(mState);
 	}
 
@@ -264,7 +264,7 @@ public:
 	auto executeCode(const char* code)
 		-> TType
 	{
-		load(code);
+		load(mState, code);
 		return call<TType>(mState);
 	}
 	
@@ -1039,7 +1039,7 @@ private:
 	/**************************************************/
 	// this function loads data from the stream and pushes a function at the top of the stack
 	// throws in case of syntax error
-	void load(std::istream& code) {
+	static void load(lua_State* state, std::istream& code) {
 		// since the lua_load function requires a static function, we use this structure
 		// the Reader structure is at the same time an object storing an istream and a buffer,
 		//   and a static function provider
@@ -1063,7 +1063,7 @@ private:
 
 		// we create an instance of Reader, and we call lua_load
 		Reader reader{code};
-		const auto loadReturnValue = lua_load(mState, &Reader::read, &reader, "chunk"
+		const auto loadReturnValue = lua_load(state, &Reader::read, &reader, "chunk"
 #			if LUA_VERSION_NUM >= 502
 				, nullptr
 #			endif
@@ -1072,8 +1072,8 @@ private:
 		// now we have to check return value
 		if (loadReturnValue != 0) {
 			// there was an error during loading, an error message was pushed on the stack
-			const std::string errorMsg = lua_tostring(mState, -1);
-			lua_pop(mState, 1);
+			const std::string errorMsg = lua_tostring(state, -1);
+			lua_pop(state, 1);
 			if (loadReturnValue == LUA_ERRMEM)
 				throw std::bad_alloc();
 			else if (loadReturnValue == LUA_ERRSYNTAX)
@@ -1084,14 +1084,14 @@ private:
 	
 	// this function loads data and pushes a function at the top of the stack
 	// throws in case of syntax error
-	void load(const char* code) {
-		auto loadReturnValue = luaL_loadstring(mState, code);
+	static void load(lua_State* state, const char* code) {
+		auto loadReturnValue = luaL_loadstring(state, code);
 
 		// now we have to check return value
 		if (loadReturnValue != 0) {
 			// there was an error during loading, an error message was pushed on the stack
-			const std::string errorMsg = lua_tostring(mState, -1);
-			lua_pop(mState, 1);
+			const std::string errorMsg = lua_tostring(state, -1);
+			lua_pop(state, 1);
 			if (loadReturnValue == LUA_ERRMEM)
 				throw std::bad_alloc();
 			else if (loadReturnValue == LUA_ERRSYNTAX)
