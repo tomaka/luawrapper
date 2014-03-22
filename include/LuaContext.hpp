@@ -267,6 +267,73 @@ public:
 		load(mState, code);
 		return call<TType>(mState);
 	}
+
+	/**
+	 * Executes lua code from the stream
+	 * @param code		A stream that Lua will read its code from
+	 */
+	void executeCode(const ThreadID& thread, std::istream& code)
+	{
+		load(thread.state, code);
+		call<std::tuple<>>(thread.state);
+	}
+
+	/**
+	 * Executes lua code from the stream and returns a value
+	 * @param code		A stream that Lua will read its code from
+	 * @tparam TType	The type that the executing code should return
+	 */
+	template<typename TType>
+	auto executeCode(const ThreadID& thread, std::istream& code)
+		-> TType
+	{
+		load(thread.state, code);
+		return call<TType>(thread.state);
+	}
+
+	/**
+	 * Executes lua code given as parameter
+	 * @param code		A string containing code that will be executed by Lua
+	 */
+	void executeCode(const ThreadID& thread, const std::string& code)
+	{
+		executeCode(thread, code.c_str());
+	}
+	
+	/*
+	 * Executes Lua code from the stream and returns a value
+	 * @param code		A string containing code that will be executed by Lua
+	 * @tparam TType	The type that the executing code should return
+	 */
+	template<typename TType>
+	auto executeCode(const ThreadID& thread, const std::string& code)
+		-> TType
+	{
+		return executeCode<TType>(thread, code.c_str());
+	}
+
+	/**
+	 * Executes Lua code
+	 * @param code		A string containing code that will be executed by Lua
+	 */
+	void executeCode(const ThreadID& thread, const char* code)
+	{
+		load(thread.state, code);
+		call<std::tuple<>>(thread.state);
+	}
+
+	/*
+	 * Executes Lua code from the stream and returns a value
+	 * @param code		A string containing code that will be executed by Lua
+	 * @tparam TType	The type that the executing code should return
+	 */
+	template<typename TType>
+	auto executeCode(const ThreadID& thread, const char* code)
+		-> TType
+	{
+		load(thread.state, code);
+		return call<TType>(thread.state);
+	}
 	
 	/**
 	 * Tells that Lua will be allowed to access an object's function
