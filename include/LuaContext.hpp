@@ -542,7 +542,7 @@ public:
 	TType readVariable(const std::string& variableName, TNestedTypes&&... nestedElements) const
 	{
 		lua_getglobal(mState, variableName.c_str());
-		lookIntoStackTop(std::forward<TNestedTypes>(nestedElements)...);
+		lookIntoStackTop(mState, std::forward<TNestedTypes>(nestedElements)...);
 		return readTopAndPop<TType>(mState, 1);
 	}
 	
@@ -553,7 +553,7 @@ public:
 	TType readVariable(const char* variableName, TNestedTypes&&... nestedElements) const
 	{
 		lua_getglobal(mState, variableName);
-		lookIntoStackTop(std::forward<TNestedTypes>(nestedElements)...);
+		lookIntoStackTop(mState, std::forward<TNestedTypes>(nestedElements)...);
 		return readTopAndPop<TType>(mState, 1);
 	}
 
@@ -652,25 +652,29 @@ private:
 	// this function takes a value representing the offset to look into
 	// it will look into the top element of the stack and replace the element by its content at the given index
 	template<typename OffsetType1, typename... OffsetTypeOthers>
-	void lookIntoStackTop(OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) const {
+	static void lookIntoStackTop(lua_State* state, OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) {
 		static_assert(Pusher<typename std::decay<OffsetType1>::type>::minSize == 1 && Pusher<typename std::decay<OffsetType1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
-		Pusher<typename std::decay<OffsetType1>::type>::push(mState, offset1);
-		lua_gettable(mState, -2);
-		lua_remove(mState, -2);
+		Pusher<typename std::decay<OffsetType1>::type>::push(state, offset1);
+		lua_gettable(state, -2);
+		lua_remove(state, -2);
 
-		lookIntoStackTop(std::forward<OffsetTypeOthers>(offsetOthers)...);
+		lookIntoStackTop(state, std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
 
 	template<typename... OffsetTypeOthers>
-	void lookIntoStackTop(Metatable_t, OffsetTypeOthers&&... offsetOthers) const {
-		lua_getmetatable(mState, -1);
-		lua_remove(mState, -2);
+	static void lookIntoStackTop(lua_State* state, Metatable_t, OffsetTypeOthers&&... offsetOthers) {
+		lua_getmetatable(state, -1);
+		lua_remove(state, -2);
 
-		lookIntoStackTop(std::forward<OffsetTypeOthers>(offsetOthers)...);
+		lookIntoStackTop(state, std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
-
-
-	void lookIntoStackTop() const {
+	
+	template<typename... OffsetTypeOthers>
+	static void lookIntoStackTop(lua_State*, const ThreadID& thread, OffsetTypeOthers&&... offsetOthers) {
+		lookIntoStackTop(thread.state, std::forward<OffsetTypeOthers>(offsetOthers)...);
+	}
+	
+	static void lookIntoStackTop(lua_State*) {
 	}
 	
 	// equivalent of lua_settable with t[k]=n, where t is the value at the index in the template parameter, k is the second parameter, n is the last parameter, and n is pushed by the function in the first parameter
