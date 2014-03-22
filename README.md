@@ -63,6 +63,16 @@ All basic language types (`int`, `float`, `bool`, `char`, ...), plus `std::strin
 
 If you don't know the type of a variable in advance, you can read a `boost::variant`. If you want to read a variable but don't know whether it exists, you can read a `boost::optional`. More informations about this below.
 
+#### Easier way to read and write variables
+
+Instead of calling `readVariable` and `writeVariable`, you can also use this syntax:
+
+    LuaContext lua;
+    lua["a"] = 5;
+    lua["b"] = "hello";
+    if (lua["a"] == 5)
+        std::cout << "Working correctly";
+
 #### Writing functions
 
 Writing a function is as easy as writing a value:
@@ -161,12 +171,10 @@ If the error is not handled by the Lua code, then it will propagate outside of `
     LuaContext lua;
     lua.registerFunction("increment", &Object::increment);
     
-    lua.writeVariable("obj", Object{});
-    lua.executeCode("obj:increment();");
+    lua["obj"] = Object{};
+    lua.executeCode("obj:increment();");    // prints "incrementing"
 
-    std::cout << lua.readVariable<Object>("obj").value << std::endl;
-
-Prints `incrementing` and `11`.
+    std::cout << lua["obj"].value << std::endl;     // prints "11"
 
 In addition to basic types and functions, you can also pass any object to `writeVariable`. The object will be moved into Lua by calling its copy or move constructor.
 
