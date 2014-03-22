@@ -79,9 +79,6 @@ public:
 		mState = luaL_newstate();
 		if (mState == nullptr)		throw std::bad_alloc();
 
-		// pushing a pointer to ourselves in the registry
-		updateRegistryPointer();
-
 		// setting the panic function
 		lua_atpanic(mState, [](lua_State* state) -> int {
 			const std::string str = lua_tostring(state, -1);
@@ -102,8 +99,6 @@ public:
 		mState(s.mState)
 	{
 		s.mState = luaL_newstate();
-		updateRegistryPointer();
-		s.updateRegistryPointer();
 	}
 	
 	/**
@@ -112,8 +107,6 @@ public:
 	LuaContext& operator=(LuaContext&& s)
 	{
 		std::swap(mState, s.mState);
-		updateRegistryPointer();
-		s.updateRegistryPointer();
 		return *this;
 	}
 
@@ -634,8 +627,6 @@ public:
 
 private:
 	// the state is the most important variable in the class since it is our interface with Lua
-	//  - there is a permanent pointer to the LuaContext* stored in the lua state's registry
-	//    it is available for everything that needs it and its offset is at &typeid(LuaContext)
 	//  - registered members and functions are stored in tables at offset &typeid(type) of the registry
 	//    each table has its getter functions at offset 0, getter members at offset 1, default getter at offset 2
 	//	  offset 3 is unused, setter members at offset 4, default setter at offset 5
@@ -785,15 +776,6 @@ private:
 		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(state, lua_type(state, -nb)), typeid(TReturnType)};
 		return val.get();
-	}
-
-	// there is a permanent pointer to the LuaContext* stored in the lua state's registry
-	// it is available for everything that needs it and its offset is at &typeid(LuaContext)
-	// this function refreshes it
-	void updateRegistryPointer() {
-		lua_pushlightuserdata(mState, const_cast<std::type_info*>(&typeid(LuaContext)));
-		lua_pushlightuserdata(mState, this);
-		lua_settable(mState, LUA_REGISTRYINDEX);
 	}
 
 	// checks that the offsets for a type's registrations are set in the registry
@@ -1352,14 +1334,14 @@ private:
 	struct GenerateSequence { typedef typename IncrementSequence<typename GenerateSequence<N - 1>::type>::type type; };
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple, int... S>
-	auto callWithTupleImpl(TFunctionObject&& function, const TTuple& parameters, Sequence<S...>) const
+	static auto callWithTupleImpl(TFunctionObject&& function, const TTuple& parameters, Sequence<S...>)
 		-> TRetValue
 	{
 		return function(std::get<S>(parameters)...);
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
+	static auto callWithTuple(TFunctionObject&& function, const TTuple& parameters)
 		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
 	{
 		// implementation with a return type
@@ -1367,7 +1349,7 @@ private:
 	}
 
 	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	auto callWithTuple(TFunctionObject&& function, const TTuple& parameters) const
+	static auto callWithTuple(TFunctionObject&& function, const TTuple& parameters)
 		-> typename std::enable_if<std::is_void<TRetValue>::value, std::tuple<>>::type
 	{
 		// implementation without a return type
@@ -1960,11 +1942,6 @@ private:
 	// this function is used by the callbacks and handles loading arguments from the stack and pushing the return value back
 	template<typename TFunctionObject>
 	static int callback(lua_State* state, TFunctionObject* toCall, int argumentsCount) {
-		lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(LuaContext)));
-		lua_gettable(state, LUA_REGISTRYINDEX);
-		const auto me = static_cast<LuaContext*>(lua_touserdata(state, -1));
-		lua_pop(state, 1);
-
 		// checking if number of parameters is correct
 		if (argumentsCount < LocalFunctionArgumentsCounter::min) {
 			// if not, using lua_error to return an error
@@ -2003,7 +1980,7 @@ private:
 		
 		// calling the function, note that "result" should be a tuple
 		try {
-			auto result = me->callWithTuple<TReturnType>(*toCall, *parameters);
+			auto result = callWithTuple<TReturnType>(*toCall, *parameters);
 
 			// pushing the result on the stack and returning number of pushed elements
 			return Pusher<typename std::decay<decltype(result)>::type>::push(state, std::move(result));
