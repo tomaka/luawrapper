@@ -68,6 +68,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * it wants. These arguments may only be of basic types (int, float, etc.) or std::string.
  */
 class LuaContext {
+	struct ValueInRegistry;
 public:
 	/**
 	 * @param openDefaultLibs True if luaL_openlibs should be called
@@ -183,6 +184,19 @@ public:
 	 */
 	template<typename TFunctionType>
 	class LuaFunctionCaller;
+
+	/**
+	 * Opaque type that identifies a Lua thread
+	 */
+	struct ThreadID {
+		ThreadID() = default;
+		ThreadID(ThreadID&& o) : state(o.state), threadInRegistry(std::move(o.threadInRegistry)) { }
+		ThreadID& operator=(ThreadID&& o) { std::swap(state, o.state); std::swap(threadInRegistry, o.threadInRegistry); }
+	public:
+		friend LuaContext;
+		lua_State* state;
+		std::unique_ptr<ValueInRegistry> threadInRegistry;
+	};
 
 	/**
 	 * Type that is considered as an empty array
@@ -445,6 +459,33 @@ public:
 	{
 		static_assert(std::is_member_object_pointer<TMemberType>::value, "registerMember must take a member object pointer type as template parameter");
 		registerMemberImpl(tag<TMemberType>{}, std::move(readFunction));
+	}
+
+	/**
+	 * Creates a new thread
+	 * A Lua thread is not really a thread, but rather an "execution stack".
+	 * You can destroy the thread by calling destroyThread
+	 * @sa destroyThread
+	 */
+	auto createThread()
+		-> ThreadID
+	{
+		ThreadID result;
+
+		result.state = lua_newthread(mState);
+		result.threadInRegistry = std::unique_ptr<ValueInRegistry>(new ValueInRegistry(mState));
+		lua_pop(mState, 1);
+
+		return std::move(result);
+	}
+
+	/**
+	 * Destroys a thread created with createThread
+	 * @sa createThread
+	 */
+	void destroyThread(ThreadID id)
+	{
+		id.threadInRegistry.reset();
 	}
 	
 	/**
