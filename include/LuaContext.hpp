@@ -556,6 +556,7 @@ public:
 			lua_settable(id.state, -3);
 			lua_setmetatable(id.state, -2);
 			lua_pushinteger(id.state, LUA_RIDX_GLOBALS);
+			lua_insert(id.state, -2);
 			lua_settable(id.state, LUA_REGISTRYINDEX);
 
 #		else
