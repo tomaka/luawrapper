@@ -630,25 +630,47 @@ public:
 	 * If the variable is an array, it will instead get the element of that array whose offset is the second parameter.
 	 * Same applies for third, fourth, etc. parameters.
 	*/
-	template<typename TType, typename... TNestedTypes>
-	TType readVariable(const std::string& variableName, TNestedTypes&&... nestedElements) const
+	template<typename TType, typename... TTypes>
+	TType readVariable(const std::string& name, TTypes&&... elements) const
 	{
-		lua_getglobal(mState, variableName.c_str());
-		lookIntoStackTop(mState, std::forward<TNestedTypes>(nestedElements)...);
+		lua_getglobal(mState, name.c_str());
+		lookIntoStackTop(mState, std::forward<TTypes>(elements)...);
 		return readTopAndPop<TType>(mState, 1);
 	}
 	
 	/**
 	 * @sa readVariable
 	 */
-	template<typename TType, typename... TNestedTypes>
-	TType readVariable(const char* variableName, TNestedTypes&&... nestedElements) const
+	template<typename TType, typename... TTypes>
+	TType readVariable(const char* name, TTypes&&... elements) const
 	{
-		lua_getglobal(mState, variableName);
-		lookIntoStackTop(mState, std::forward<TNestedTypes>(nestedElements)...);
+		lua_getglobal(mState, name);
+		lookIntoStackTop(mState, std::forward<TTypes>(elements)...);
 		return readTopAndPop<TType>(mState, 1);
 	}
-
+	
+	/**
+	 * @sa readVariable
+	 */
+	template<typename TType, typename... TTypes>
+	TType readVariable(const ThreadID& thread, const std::string& name, TTypes&&... elements) const
+	{
+		lua_getglobal(thread.state, name.c_str());
+		lookIntoStackTop(thread.state, std::forward<TTypes>(elements)...);
+		return readTopAndPop<TType>(thread.state, 1);
+	}
+	
+	/**
+	 * @sa readVariable
+	 */
+	template<typename TType, typename... TTypes>
+	TType readVariable(const ThreadID& thread, const char* name, TTypes&&... elements) const
+	{
+		lua_getglobal(thread.state, name);
+		lookIntoStackTop(thread.state, std::forward<TTypes>(elements)...);
+		return readTopAndPop<TType>(thread.state, 1);
+	}
+	
 	/**
 	 * Changes the content of a Lua variable
 	 * 
@@ -757,11 +779,6 @@ private:
 		lua_remove(state, -2);
 
 		lookIntoStackTop(state, std::forward<OffsetTypeOthers>(offsetOthers)...);
-	}
-	
-	template<typename... OffsetTypeOthers>
-	static void lookIntoStackTop(lua_State*, const ThreadID& thread, OffsetTypeOthers&&... offsetOthers) {
-		lookIntoStackTop(thread.state, std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
 	
 	static void lookIntoStackTop(lua_State*) {
