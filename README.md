@@ -1,5 +1,7 @@
 ## Tomaka's lua wrapper
 
+[![Build Status](https://travis-ci.org/Tomaka17/luawrapper.svg?branch=master)](https://travis-ci.org/Tomaka17/luawrapper)
+
 ### What is this library?
 This lua wrapper for C++ is a library which allows you to easily manage lua code. It was designed to be as simple as possible to use.
 
