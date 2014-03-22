@@ -255,21 +255,21 @@ public:
 		}
 
 		template<typename TRetValue, typename... TParams>
-		TRetValue call(const TParams&... params) const
+		TRetValue call(TParams&&... params) const
 		{
-			return to<std::function<TRetValue (TParams...)>>()();
+			return to<std::function<TRetValue (TParams&&...)>>()(std::forward<TParams>(params)...);
 		}
 
 		template<typename... TParams>
-		void call(const TParams&... params) const
+		void call(TParams&&... params) const
 		{
-			to<std::function<void (TParams...)>>()();
+			to<std::function<void (TParams&&...)>>()(std::forward<TParams>(params)...);
 		}
 		
 		template<typename... TParams>
-		void operator()(const TParams&... params) const
+		void operator()(TParams&&... params) const
 		{
-			to<std::function<void (TParams...)>>()();
+			to<std::function<void (TParams&&...)>>()(std::forward<TParams>(params)...);
 		}
 
 	private:
