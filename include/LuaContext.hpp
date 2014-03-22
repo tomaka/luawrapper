@@ -191,7 +191,7 @@ public:
 	struct ThreadID {
 		ThreadID() = default;
 		ThreadID(ThreadID&& o) : state(o.state), threadInRegistry(std::move(o.threadInRegistry)) { }
-		ThreadID& operator=(ThreadID&& o) { std::swap(state, o.state); std::swap(threadInRegistry, o.threadInRegistry); }
+		ThreadID& operator=(ThreadID&& o) { std::swap(state, o.state); std::swap(threadInRegistry, o.threadInRegistry); return *this; }
 	public:
 		friend LuaContext;
 		lua_State* state;
@@ -583,7 +583,7 @@ public:
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1,RealDataType>(std::forward<TData>(data)...);
+				setTable<-1,RealDataType>(mState, std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 				throw;
@@ -605,7 +605,7 @@ public:
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
 			try {
-				setTable<-1,TFunctionType>(std::forward<TData>(data)...);
+				setTable<-1,TFunctionType>(mState, std::forward<TData>(data)...);
 			} catch(...) {
 				lua_pop(mState, 1);
 				throw;
