@@ -102,7 +102,7 @@ public:
      */
     template<typename TType, typename TCode>
     auto executeCode(TCode&& code) const
-        -> decltype(mLua->executeCode<TType>(std::forward<TCode>(code)))
+        -> TType
     {
         return mLua->executeCode<TType>(mThread, std::forward<TCode>(code));
     }
