@@ -1738,6 +1738,18 @@ struct LuaContext::Pusher<const std::type_info*> {
 	}
 };
 
+// thread
+template<>
+struct LuaContext::Pusher<LuaContext::ThreadID> {
+	static const int minSize = 1;
+	static const int maxSize = 1;
+
+	static int push(lua_State* state, const LuaContext::ThreadID& value) {
+		lua_pushthread(value.state);
+		return 1;
+	}
+};
+
 // maps
 template<typename TKey, typename TValue>
 struct LuaContext::Pusher<std::map<TKey,TValue>> {
