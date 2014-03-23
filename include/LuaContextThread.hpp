@@ -55,14 +55,6 @@ public:
     /**
      * 
      */
-    void forkGlobals() const
-    {
-        mLua->forkGlobals(mThread);
-    }
-
-    /**
-     * 
-     */
     template<typename TType, typename... TTypes>
     auto readVariable(TTypes&&... elements) const
         -> TType

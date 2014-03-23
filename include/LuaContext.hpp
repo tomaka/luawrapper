@@ -540,40 +540,6 @@ public:
 	}
 
 	/**
-	 * Forks the global variables
-	 * After this function call:
-	 *  - existing global variables can still be read ; if they are modified in the LuaContext, then the changes are reflected
-	 *  - writing over an existing global variable will hide the existing one but not write over it
-	 */
-	void forkGlobals(const ThreadID& id)
-	{
-#		if LUA_VERSION_NUM >= 502
-			
-			lua_newtable(id.state);
-			lua_newtable(id.state);
-			lua_pushliteral(id.state, "__index");
-			lua_pushglobaltable(id.state);
-			lua_settable(id.state, -3);
-			lua_setmetatable(id.state, -2);
-			lua_pushinteger(id.state, LUA_RIDX_GLOBALS);
-			lua_pushvalue(id.state, -2);
-			lua_settable(id.state, LUA_REGISTRYINDEX);
-			lua_pop(id.state, 1);
-
-#		else
-
-			lua_newtable(id.state);
-			lua_newtable(id.state);
-			lua_pushliteral(id.state, "__index");
-			lua_pushvalue(id.state, LUA_GLOBALSINDEX);
-			lua_settable(id.state, -3);
-			lua_setmetatable(id.state, -2);
-			lua_replace(id.state, LUA_GLOBALSINDEX);
-
-#		endif
-	}
-
-	/**
 	 * Destroys a thread created with createThread
 	 * @sa createThread
 	 */

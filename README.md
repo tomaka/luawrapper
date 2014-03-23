@@ -394,11 +394,7 @@ Lua threads are not *real* threads, instead they allow you to have multiple exec
     lua.writeVariable("a", 2);
     
     LuaContextThread thread1(&lua);
-    thread1.forkGlobals();
     thread1.writeVariable("a", "hello");
-    
-    std::cout << lua.readVariable<int>("a"); << std::endl;    // 2
-    std::cout << thread1.readVariable<std::string>("a"); << std::endl;    // "hello"
 
 
 #### Custom member functions
