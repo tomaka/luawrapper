@@ -630,13 +630,8 @@ public:
 
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
-			try {
-				setTable<-1,RealDataType>(mState, std::forward<TData>(data)...);
-			} catch(...) {
-				lua_pop(mState, 1);
-				throw;
-			}
-			lua_pop(mState, 1);
+			PushedObject obj{mState, 1};
+			setTable<-1,RealDataType>(mState, std::forward<TData>(data)...);
 #		else
 			setTable<LUA_GLOBALSINDEX,RealDataType>(mState, std::forward<TData>(data)...);
 #		endif
@@ -652,13 +647,8 @@ public:
 		
 #		if LUA_VERSION_NUM >= 502
 			lua_pushglobaltable(mState);
-			try {
-				setTable<-1,TFunctionType>(mState, std::forward<TData>(data)...);
-			} catch(...) {
-				lua_pop(mState, 1);
-				throw;
-			}
-			lua_pop(mState, 1);
+			PushedObject obj{mState, 1};
+			setTable<-1,TFunctionType>(mState, std::forward<TData>(data)...);
 #		else
 			setTable<LUA_GLOBALSINDEX,TFunctionType>(mState, std::forward<TData>(data)...);
 #		endif
@@ -1338,45 +1328,43 @@ private:
 			//   and that's what we do with placement-new
 			const auto pointerLocation = static_cast<TType*>(lua_newuserdata(state, sizeof(TType)));
 			new (pointerLocation) TType(std::forward<TType2>(value));
+			PushedObject obj{mState, 1};
 
-			try {
-				// creating the metatable (over the object on the stack)
-				// lua_settable pops the key and value we just pushed, so stack management is easy
-				// all that remains on the stack after these function calls is the metatable
-				lua_newtable(state);
-				try {
-					// using the garbage collecting function we created above
-					if (!boost::has_trivial_destructor<TType>::value)
-					{
-						lua_pushstring(state, "__gc");
-						lua_pushcfunction(state, garbageCallbackFunction);
-						lua_settable(state, -3);
-					}
+			// creating the metatable (over the object on the stack)
+			// lua_settable pops the key and value we just pushed, so stack management is easy
+			// all that remains on the stack after these function calls is the metatable
+			auto pushedTable = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
-					// the _typeid index of the metatable will store the type_info*
-					lua_pushstring(state, "_typeid");
-					lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(TType)));
-					lua_settable(state, -3);
+			// using the garbage collecting function we created above
+			if (!boost::has_trivial_destructor<TType>::value)
+			{
+				lua_pushstring(state, "__gc");
+				lua_pushcfunction(state, garbageCallbackFunction);
+				lua_settable(state, -3);
+			}
 
-					// using the index function we created above
-					lua_pushstring(state, "__index");
-					lua_pushcfunction(state, indexFunction);
-					lua_settable(state, -3);
+			// the _typeid index of the metatable will store the type_info*
+			lua_pushstring(state, "_typeid");
+			lua_pushlightuserdata(state, const_cast<std::type_info*>(&typeid(TType)));
+			lua_settable(state, -3);
 
-					// using the newindex function we created above
-					lua_pushstring(state, "__newindex");
-					lua_pushcfunction(state, newIndexFunction);
-					lua_settable(state, -3);
+			// using the index function we created above
+			lua_pushstring(state, "__index");
+			lua_pushcfunction(state, indexFunction);
+			lua_settable(state, -3);
 
-					// at this point, the stack contains the object at offset -2 and the metatable at offset -1
-					// lua_setmetatable will bind the two together and pop the metatable
-					// our custom type remains on the stack (and that's what we want since this is a push function)
-					lua_setmetatable(state, -2);
+			// using the newindex function we created above
+			lua_pushstring(state, "__newindex");
+			lua_pushcfunction(state, newIndexFunction);
+			lua_settable(state, -3);
 
-				} catch (...) { lua_pop(state, 1); throw; }
-			} catch (...) { lua_pop(state, 1); throw; }
-
-			return PushedObject{state, 1};
+			// at this point, the stack contains the object at offset -2 and the metatable at offset -1
+			// lua_setmetatable will bind the two together and pop the metatable
+			// our custom type remains on the stack (and that's what we want since this is a push function)
+			lua_setmetatable(state, -2);
+			pushedTable.release();
+			
+			return std::move(obj);
 		}
 	};
 	
