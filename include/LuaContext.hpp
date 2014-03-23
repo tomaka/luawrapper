@@ -207,8 +207,8 @@ public:
 	 */
 	void executeCode(std::istream& code)
 	{
-		load(mState, code);
-		call<std::tuple<>>(mState);
+		auto toCall = load(mState, code);
+		call<std::tuple<>>(mState, std::move(toCall));
 	}
 
 	/**
@@ -220,8 +220,8 @@ public:
 	auto executeCode(std::istream& code)
 		-> TType
 	{
-		load(mState, code);
-		return call<TType>(mState);
+		auto toCall = load(mState, code);
+		return call<TType>(mState, std::move(toCall));
 	}
 
 	/**
@@ -251,8 +251,8 @@ public:
 	 */
 	void executeCode(const char* code)
 	{
-		load(mState, code);
-		call<std::tuple<>>(mState);
+		auto toCall = load(mState, code);
+		call<std::tuple<>>(mState, std::move(toCall));
 	}
 
 	/*
@@ -264,8 +264,8 @@ public:
 	auto executeCode(const char* code)
 		-> TType
 	{
-		load(mState, code);
-		return call<TType>(mState);
+		auto toCall = load(mState, code);
+		return call<TType>(mState, std::move(toCall));
 	}
 
 	/**
@@ -274,8 +274,8 @@ public:
 	 */
 	void executeCode(const ThreadID& thread, std::istream& code)
 	{
-		load(thread.state, code);
-		call<std::tuple<>>(thread.state);
+		auto toCall = load(thread.state, code);
+		call<std::tuple<>>(thread.state, std::move(toCall));
 	}
 
 	/**
@@ -287,8 +287,8 @@ public:
 	auto executeCode(const ThreadID& thread, std::istream& code)
 		-> TType
 	{
-		load(thread.state, code);
-		return call<TType>(thread.state);
+		auto toCall = load(thread.state, code);
+		return call<TType>(thread.state, std::move(toCall));
 	}
 
 	/**
@@ -318,8 +318,8 @@ public:
 	 */
 	void executeCode(const ThreadID& thread, const char* code)
 	{
-		load(thread.state, code);
-		call<std::tuple<>>(thread.state);
+		auto toCall = load(thread.state, code);
+		call<std::tuple<>>(thread.state, std::move(toCall));
 	}
 
 	/*
@@ -331,8 +331,8 @@ public:
 	auto executeCode(const ThreadID& thread, const char* code)
 		-> TType
 	{
-		load(thread.state, code);
-		return call<TType>(thread.state);
+		auto toCall = load(thread.state, code);
+		return call<TType>(thread.state, std::move(toCall));
 	}
 	
 	/**
@@ -569,7 +569,7 @@ public:
 	{
 		lua_getglobal(mState, name.c_str());
 		lookIntoStackTop(mState, std::forward<TTypes>(elements)...);
-		return readTopAndPop<TType>(mState, 1);
+		return readTopAndPop<TType>(mState, PushedObject{mState, 1});
 	}
 	
 	/**
@@ -580,7 +580,7 @@ public:
 	{
 		lua_getglobal(mState, name);
 		lookIntoStackTop(mState, std::forward<TTypes>(elements)...);
-		return readTopAndPop<TType>(mState, 1);
+		return readTopAndPop<TType>(mState, PushedObject{mState, 1});
 	}
 	
 	/**
@@ -591,7 +591,7 @@ public:
 	{
 		lua_getglobal(thread.state, name.c_str());
 		lookIntoStackTop(thread.state, std::forward<TTypes>(elements)...);
-		return readTopAndPop<TType>(thread.state, 1);
+		return readTopAndPop<TType>(thread.state, PushedObject{thread.state, 1});
 	}
 	
 	/**
@@ -602,7 +602,7 @@ public:
 	{
 		lua_getglobal(thread.state, name);
 		lookIntoStackTop(thread.state, std::forward<TTypes>(elements)...);
-		return readTopAndPop<TType>(thread.state, 1);
+		return readTopAndPop<TType>(thread.state, PushedObject{thread.state, 1});
 	}
 	
 	/**
@@ -686,6 +686,34 @@ private:
 	//    each table has its getter functions at offset 0, getter members at offset 1, default getter at offset 2
 	//	  offset 3 is unused, setter members at offset 4, default setter at offset 5
 	lua_State*					mState;
+
+	
+	/**************************************************/
+	/*                 PUSH OBJECT                    */
+	/**************************************************/
+	struct PushedObject {
+		PushedObject(lua_State* state, int num = 1) : state(state), num(num) {}
+		~PushedObject() { assert(lua_gettop(state) >= num); if (num >= 1) lua_pop(state, num); }
+		
+		PushedObject& operator=(const PushedObject&) = delete;
+		PushedObject(const PushedObject&) = delete;
+		PushedObject& operator=(PushedObject&& other) { std::swap(state, other.state); std::swap(num, other.num); return *this; }
+		PushedObject(PushedObject&& other) : state(other.state), num(other.num) { other.num = 0; }
+
+		PushedObject operator+(PushedObject&& other) && { PushedObject obj(state, num + other.num); num = 0; other.num = 0; return std::move(obj); }
+		void operator+=(PushedObject&& other) { assert(state == other.state); num += other.num; other.num = 0; }
+		
+		auto getState() const -> lua_State* { return state; }
+		auto getNum() const -> int { return num; }
+
+		int release() { const auto n = num; num = 0; return n; }
+		void pop() { if (num >= 1) lua_pop(state, num); num = 0; }
+		void pop(int n) { assert(num >= n); lua_pop(state, n); num -= n; }
+
+	private:
+		lua_State* state;
+		int num = 0;
+	};
 	
 
 	/**************************************************/
@@ -700,9 +728,10 @@ private:
 	template<typename OffsetType1, typename... OffsetTypeOthers>
 	static void lookIntoStackTop(lua_State* state, OffsetType1&& offset1, OffsetTypeOthers&&... offsetOthers) {
 		static_assert(Pusher<typename std::decay<OffsetType1>::type>::minSize == 1 && Pusher<typename std::decay<OffsetType1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
-		Pusher<typename std::decay<OffsetType1>::type>::push(state, offset1);
+		auto p1 = Pusher<typename std::decay<OffsetType1>::type>::push(state, offset1);
 		lua_gettable(state, -2);
 		lua_remove(state, -2);
+		p1.release();
 
 		lookIntoStackTop(state, std::forward<OffsetTypeOthers>(offsetOthers)...);
 	}
@@ -727,41 +756,55 @@ private:
 	{
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
-		Pusher<typename std::decay<TIndex>::type>::push(state, index);
-		try { Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data)); } catch(...) { lua_pop(state, 1); throw; }
+		
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 2;
+
+		auto p1 = Pusher<typename std::decay<TIndex>::type>::push(state, index);
+		auto p2 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+
 		assert(lua_istable(state, tableIndex));
 		lua_settable(state, tableIndex);
+		p1.release();
+		p2.release();
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
 	static void setTable(lua_State* state, const std::string& index, TData&& data)
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
-		Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+
+		auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
 		assert(lua_istable(state, tableIndex));
 		lua_setfield(state, tableIndex, index.c_str());
+		p1.release();
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
 	static void setTable(lua_State* state, const char* index, TData&& data)
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
-		Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+		
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+
+		auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
 		assert(lua_istable(state, tableIndex));
 		lua_setfield(state, tableIndex, index);
+		p1.release();
 	}
 
 	template<int TTableIndex, typename TDataType, typename TData>
 	static void setTable(lua_State* state, Metatable_t, TData&& data)
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
-		Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+		
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+
+		auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
 		assert(lua_istable(state, tableIndex));
 		lua_setmetatable(state, tableIndex);
+		p1.release();
 	}
 
 	template<int TTableIndex, typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
@@ -769,16 +812,13 @@ private:
 		-> typename std::enable_if<!std::is_same<typename std::decay<TIndex1>::type, Metatable_t>::value>::type
 	{
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
-		Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1));
+		
 		const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
+
+		auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1));
 		lua_gettable(state, tableIndex);
-		try {
-			setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
-		} catch(...) {
-			lua_pop(state, 1);
-			throw;
-		}
-		lua_pop(state, 1);
+
+		setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
 	}
 
 	template<int TTableIndex, typename TDataType, typename TIndex2, typename... TIndices>
@@ -787,24 +827,17 @@ private:
 		if (lua_getmetatable(state, TTableIndex) == 0)
 		{
 			lua_newtable(state);
+			PushedObject p1{state, 1};
 			const auto tableIndex = (TTableIndex < -100 || TTableIndex > 0) ? TTableIndex : TTableIndex - 1;
-			try {
-				setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
-			} catch(...) {
-				lua_pop(state, 1);
-				throw;
-			}
+
+			setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+
 			lua_setmetatable(state, tableIndex);
+			p1.release();
 		}
 		else
 		{
-			try {
-				setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
-			} catch(...) {
-				lua_pop(state, 1);
-				throw;
-			}
-			lua_pop(state, 1);
+			setTable<-1,TDataType>(state, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
 		}
 	}
 
@@ -818,13 +851,12 @@ private:
 	// warning: first parameter is the number of parameters, not the parameter index
 	// if read generates an exception, stack is poped anyway
 	template<typename TReturnType>
-	static auto readTopAndPop(lua_State* state, int nb)
+	static auto readTopAndPop(lua_State* state, PushedObject object)
 		-> TReturnType
 	{
-		auto val = Reader<typename std::decay<TReturnType>::type>::testRead(state, -nb);
-		lua_pop(state, nb);
+		auto val = Reader<typename std::decay<TReturnType>::type>::testRead(state, -object.getNum());
 		if (!val.is_initialized())
-			throw WrongTypeException{lua_typename(state, lua_type(state, -nb)), typeid(TReturnType)};
+			throw WrongTypeException{lua_typename(state, lua_type(state, -object.getNum())), typeid(TReturnType)};
 		return val.get();
 	}
 
@@ -1057,7 +1089,7 @@ private:
 	/**************************************************/
 	// this function loads data from the stream and pushes a function at the top of the stack
 	// throws in case of syntax error
-	static void load(lua_State* state, std::istream& code) {
+	static PushedObject load(lua_State* state, std::istream& code) {
 		// since the lua_load function requires a static function, we use this structure
 		// the Reader structure is at the same time an object storing an istream and a buffer,
 		//   and a static function provider
@@ -1098,11 +1130,13 @@ private:
 				throw SyntaxErrorException{errorMsg};
 			throw std::runtime_error("Error while calling lua_load: " + errorMsg);
 		}
+
+		return PushedObject{state, 1};
 	}
 	
 	// this function loads data and pushes a function at the top of the stack
 	// throws in case of syntax error
-	static void load(lua_State* state, const char* code) {
+	static PushedObject load(lua_State* state, const char* code) {
 		auto loadReturnValue = luaL_loadstring(state, code);
 
 		// now we have to check return value
@@ -1116,48 +1150,41 @@ private:
 				throw SyntaxErrorException{errorMsg};
 			throw std::runtime_error("Error while calling lua_load: " + errorMsg);
 		}
+
+		return PushedObject{state, 1};
 	}
 
 	// this function calls what is on the top of the stack and removes it (just like lua_call)
 	// if an exception is triggered, the top of the stack will be removed anyway
 	template<typename TReturnType, typename... TParameters>
-	static auto call(lua_State* state, TParameters&&... input)
+	static auto call(lua_State* state, PushedObject toCall, TParameters&&... input)
 		-> TReturnType
 	{
 		typedef typename Tupleizer<TReturnType>::type
 			RealReturnType;
-		const int outArguments = std::tuple_size<RealReturnType>::value;
 		
 		// we push the parameters on the stack
-		int inArguments;
-		try {
-			inArguments = Pusher<std::tuple<TParameters...>>::push(state, std::make_tuple(std::forward<TParameters>(input)...));
-		} catch(...) {
-			lua_pop(state, 1);
-			throw;
-		}
+		auto inArguments = Pusher<std::tuple<TParameters...>>::push(state, std::make_tuple(std::forward<TParameters>(input)...));
 
-		// calling pcall automatically pops the parameters and pushes output
-		callRaw(state, inArguments, outArguments);
+		// 
+		const int outArgumentsCount = std::tuple_size<RealReturnType>::value;
+		auto outArguments = callRaw(state, std::move(toCall) + std::move(inArguments), outArgumentsCount);
 
 		// pcall succeeded, we pop the returned values and return them
-		try {
-			return readTopAndPop<TReturnType>(state, outArguments);
-
-		} catch(...) {
-			lua_pop(state, outArguments);
-			throw;
-		}
+		return readTopAndPop<TReturnType>(state, std::move(outArguments));
 	}
 	
 	// this function just calls lua_pcall and checks for errors
-	static void callRaw(lua_State* state, const int inArguments, const int outArguments)
+	static PushedObject callRaw(lua_State* state, PushedObject functionAndArguments, const int outArguments)
 	{
 		// calling pcall automatically pops the parameters and pushes output
-		const auto pcallReturnValue = lua_pcall(state, inArguments, outArguments, 0);
+		const auto pcallReturnValue = lua_pcall(state, functionAndArguments.getNum() - 1, outArguments, 0);
+		functionAndArguments.release();
 
 		// if pcall failed, analyzing the problem and throwing
 		if (pcallReturnValue != 0) {
+			PushedObject errorCode{state, 1};
+
 			// an error occured during execution, either an error message or a std::exception_ptr was pushed on the stack
 			if (pcallReturnValue == LUA_ERRMEM) {
 				throw std::bad_alloc{};
@@ -1165,20 +1192,22 @@ private:
 			} else if (pcallReturnValue == LUA_ERRRUN) {
 				if (lua_isstring(state, 1)) {
 					// the error is a string
-					const auto str = readTopAndPop<std::string>(state, 1);
+					const auto str = readTopAndPop<std::string>(state, std::move(errorCode));
 					throw ExecutionErrorException{str};
 
 				} else {
 					// an exception_ptr was pushed on the stack
 					// rethrowing it with an additional ExecutionErrorException
 					try {
-						std::rethrow_exception(readTopAndPop<std::exception_ptr>(state, 1));
+						std::rethrow_exception(readTopAndPop<std::exception_ptr>(state, std::move(errorCode)));
 					} catch(...) {
 						std::throw_with_nested(ExecutionErrorException{"Exception thrown by a callback function called by Lua"});
 					}
 				}
 			}
 		}
+
+		return PushedObject{state, outArguments};
 	}
 
 	
@@ -1197,7 +1226,7 @@ private:
 		static const int maxSize = 1;
 
 		template<typename TType2>
-		static int push(lua_State* state, TType2&& value) {
+		static PushedObject push(lua_State* state, TType2&& value) {
 			// this function is called when lua's garbage collector wants to destroy our object
 			// we simply call its destructor
 			const auto garbageCallbackFunction = [](lua_State* lua) -> int {
@@ -1235,8 +1264,7 @@ private:
 					lua_gettable(lua, -2);
 					if (!lua_isnil(lua, -1)) {
 						lua_pushvalue(lua, 1);
-						callRaw(lua, 1, 1);
-						return 1;
+						return callRaw(lua, PushedObject{lua, 2}, 1).release();
 					}
 					lua_pop(lua, 2);
 
@@ -1247,11 +1275,10 @@ private:
 						return 1;
 					lua_pushvalue(lua, 1);
 					lua_pushvalue(lua, 2);
-					callRaw(lua, 2, 1);
-					return 1;
+					return callRaw(lua, PushedObject{lua, 3}, 1).release();
 
 				} catch (...) {
-					Pusher<std::exception_ptr>::push(lua, std::current_exception());
+					Pusher<std::exception_ptr>::push(lua, std::current_exception()).release();
 					return lua_error(lua);
 				}
 			};
@@ -1275,7 +1302,7 @@ private:
 					if (!lua_isnil(lua, -1)) {
 						lua_pushvalue(lua, 1);
 						lua_pushvalue(lua, 3);
-						callRaw(lua, 2, 0);
+						callRaw(lua, PushedObject{lua, 3}, 0);
 						lua_pop(lua, 2);
 						return 0;
 					}
@@ -1293,12 +1320,12 @@ private:
 					lua_pushvalue(lua, 1);
 					lua_pushvalue(lua, 2);
 					lua_pushvalue(lua, 3);
-					callRaw(lua, 3, 0);
+					callRaw(lua, PushedObject{lua, 4}, 0);
 					lua_pop(lua, 1);
 					return 0;
 
 				} catch (...) {
-					Pusher<std::exception_ptr>::push(lua, std::current_exception());
+					Pusher<std::exception_ptr>::push(lua, std::current_exception()).release();
 					return lua_error(lua);
 				}
 			};
@@ -1349,7 +1376,7 @@ private:
 				} catch (...) { lua_pop(state, 1); throw; }
 			} catch (...) { lua_pop(state, 1); throw; }
 
-			return 1;
+			return PushedObject{state, 1};
 		}
 	};
 	
@@ -1491,10 +1518,11 @@ private:
 		}
 
 		// loads the value and puts it at the top of the stack
-		void pop()
+		PushedObject pop()
 		{
 			lua_pushlightuserdata(lua, this);
 			lua_gettable(lua, LUA_REGISTRYINDEX);
+			return PushedObject{lua, 1};
 		}
 
 		ValueInRegistry(const ValueInRegistry&) = delete;
@@ -1539,10 +1567,9 @@ static LuaContext::Metatable_t
 /*            PARTIAL IMPLEMENTATIONS             */
 /**************************************************/
 template<>
-inline auto LuaContext::readTopAndPop<void>(lua_State* state, int nb)
+inline auto LuaContext::readTopAndPop<void>(lua_State* state, PushedObject obj)
 	-> void
 {
-	lua_pop(state, nb);
 }
 
 // 
@@ -1628,8 +1655,8 @@ class LuaContext::LuaFunctionCaller<TRetValue (TParams...)>
 public:
 	TRetValue operator()(TParams&&... params) const
 	{
-		valueHolder->pop();
-		return call<TRetValue>(state, std::forward<TParams>(params)...);
+		auto obj = valueHolder->pop();
+		return call<TRetValue>(state, std::move(obj), std::forward<TParams>(params)...);
 	}
 
 private:
@@ -1656,9 +1683,9 @@ struct LuaContext::Pusher<bool> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, bool value) {
+	static PushedObject push(lua_State* state, bool value) {
 		lua_pushboolean(state, value);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1668,9 +1695,9 @@ struct LuaContext::Pusher<std::string> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::string& value) {
+	static PushedObject push(lua_State* state, const std::string& value) {
 		lua_pushstring(state, value.c_str());
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1680,9 +1707,9 @@ struct LuaContext::Pusher<const char*> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const char* value) {
+	static PushedObject push(lua_State* state, const char* value) {
 		lua_pushstring(state, value);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1692,9 +1719,9 @@ struct LuaContext::Pusher<const char[N]> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const char* value) {
+	static PushedObject push(lua_State* state, const char* value) {
 		lua_pushstring(state, value);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1704,9 +1731,9 @@ struct LuaContext::Pusher<T, typename std::enable_if<std::is_floating_point<T>::
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, T value) {
+	static PushedObject push(lua_State* state, T value) {
 		lua_pushnumber(state, value);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1716,9 +1743,9 @@ struct LuaContext::Pusher<T, typename std::enable_if<std::is_integral<T>::value>
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, T value) {
+	static PushedObject push(lua_State* state, T value) {
 		lua_pushinteger(state, value);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1728,10 +1755,10 @@ struct LuaContext::Pusher<std::nullptr_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, std::nullptr_t value) {
+	static PushedObject push(lua_State* state, std::nullptr_t value) {
 		assert(value == nullptr);
 		lua_pushnil(state);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1741,9 +1768,9 @@ struct LuaContext::Pusher<LuaContext::EmptyArray_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, EmptyArray_t) {
+	static PushedObject push(lua_State* state, EmptyArray_t) {
 		lua_newtable(state);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1753,9 +1780,9 @@ struct LuaContext::Pusher<const std::type_info*> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::type_info* ptr) {
+	static PushedObject push(lua_State* state, const std::type_info* ptr) {
 		lua_pushlightuserdata(state, const_cast<std::type_info*>(ptr));
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1765,9 +1792,9 @@ struct LuaContext::Pusher<LuaContext::ThreadID> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const LuaContext::ThreadID& value) {
+	static PushedObject push(lua_State* state, const LuaContext::ThreadID& value) {
 		lua_pushthread(value.state);
-		return 1;
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1777,19 +1804,21 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::map<TKey,TValue>& value) {
+	static PushedObject push(lua_State* state, const std::map<TKey,TValue>& value) {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(state);
 
 		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			Pusher<typename std::decay<TKey>::type>::push(state, i->first);
-			Pusher<typename std::decay<TValue>::type>::push(state, i->second);
+			auto p1 = Pusher<typename std::decay<TKey>::type>::push(state, i->first);
+			auto p2 = Pusher<typename std::decay<TValue>::type>::push(state, i->second);
 			lua_settable(state, -3);
+			p1.release();
+			p2.release();
 		}
-
-		return 1;
+		
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1799,19 +1828,21 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::unordered_map<TKey,TValue>& value) {
+	static PushedObject push(lua_State* state, const std::unordered_map<TKey,TValue>& value) {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(state);
 
 		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			Pusher<typename std::decay<TKey>::type>::push(state, i->first);
-			Pusher<typename std::decay<TValue>::type>::push(state, i->second);
+			auto p1 = Pusher<typename std::decay<TKey>::type>::push(state, i->first);
+			auto p2 = Pusher<typename std::decay<TValue>::type>::push(state, i->second);
 			lua_settable(state, -3);
+			p1.release();
+			p2.release();
 		}
-
-		return 1;
+		
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1821,19 +1852,21 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::vector<std::pair<TType1,TType2>>& value) {
+	static PushedObject push(lua_State* state, const std::vector<std::pair<TType1,TType2>>& value) {
 		static_assert(Pusher<typename std::decay<TType1>::type>::minSize == 1 && Pusher<typename std::decay<TType1>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TType2>::type>::minSize == 1 && Pusher<typename std::decay<TType2>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
 		lua_newtable(state);
 
 		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			Pusher<typename std::decay<TType1>::type>::push(state, i->first);
-			Pusher<typename std::decay<TType2>::type>::push(state, i->second);
+			auto p1 = Pusher<typename std::decay<TType1>::type>::push(state, i->first);
+			auto p2 = Pusher<typename std::decay<TType2>::type>::push(state, i->second);
 			lua_settable(state, -3);
+			p1.release();
+			p2.release();
 		}
-
-		return 1;
+		
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1843,18 +1876,19 @@ struct LuaContext::Pusher<std::vector<TType>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static int push(lua_State* state, const std::vector<TType>& value) {
+	static PushedObject push(lua_State* state, const std::vector<TType>& value) {
 		static_assert(Pusher<typename std::decay<TType>::type>::minSize == 1 && Pusher<typename std::decay<TType>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
 		lua_newtable(state);
 
 		for (unsigned int i = 0; i < value.size(); ++i) {
 			lua_pushinteger(state, i + 1);
-			Pusher<typename std::decay<TType>::type>::push(state, value[i]);
+			auto p1 = Pusher<typename std::decay<TType>::type>::push(state, value[i]);
 			lua_settable(state, -3);
+			p1.release();
 		}
-
-		return 1;
+		
+		return PushedObject{state, 1};
 	}
 };
 
@@ -1864,7 +1898,7 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 	static const int minSize = Pusher<std::shared_ptr<TType>>::minSize;
 	static const int maxSize = Pusher<std::shared_ptr<TType>>::maxSize;
 
-	static int push(lua_State* state, std::unique_ptr<TType> value) {
+	static PushedObject push(lua_State* state, std::unique_ptr<TType> value) {
 		return Pusher<std::shared_ptr<TType>>::push(state, std::move(value));
 	}
 };
@@ -1884,7 +1918,7 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 	static const int minSize = Pusher<RealType>::minSize;
 	static const int maxSize = Pusher<RealType>::maxSize;
 
-	static int push(lua_State* state, TEnum value) {
+	static PushedObject push(lua_State* state, TEnum value) {
 		return Pusher<RealType>::push(state, static_cast<RealType>(value));
 	}
 };
@@ -1904,7 +1938,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 	// this is the version of "push" for non-trivially destructible function objects
 	template<typename TFunctionObject>
 	static auto push(lua_State* state, TFunctionObject fn)
-		-> typename std::enable_if<!boost::has_trivial_destructor<TFunctionObject>::value, int>::type
+		-> typename std::enable_if<!boost::has_trivial_destructor<TFunctionObject>::value, PushedObject>::type
 	{
 		// TODO: is_move_constructible not supported by some compilers
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
@@ -1920,7 +1954,8 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 			assert(lua_isuserdata(lua, 1));
 			auto function = static_cast<TFunctionObject*>(lua_touserdata(lua, 1));
 			assert(function);
-			return callback(lua, function, lua_gettop(lua) - 1);
+
+			return callback(lua, function, lua_gettop(lua) - 1).release();
 		};
 
 		// this one is called when lua's garbage collector no longer needs our custom data type
@@ -1956,13 +1991,13 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		// our custom function remains on the stack (and that's what we want)
 		lua_setmetatable(state, -2);
 
-		return 1;
+		return PushedObject{state, 1};
 	}
 
 	// this is the version of "push" for trivially destructible objects
 	template<typename TFunctionObject>
 	static auto push(lua_State* state, TFunctionObject fn)
-		-> typename std::enable_if<boost::has_trivial_destructor<TFunctionObject>::value, int>::type
+		-> typename std::enable_if<boost::has_trivial_destructor<TFunctionObject>::value, PushedObject>::type
 	{
 		// TODO: is_move_constructible not supported by some compilers
 		//static_assert(std::is_move_constructible<TFunctionObject>::value, "The function object must be move-constructible");
@@ -1975,7 +2010,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 		{
 			// the function object is an upvalue
 			const auto toCall = static_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
-			return callback(state, toCall, lua_gettop(state));
+			return callback(state, toCall, lua_gettop(state)).release();
 		};
 
 		// we copy the function object onto the stack
@@ -1984,14 +2019,14 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 
 		// pushing the function with the function object as upvalue
 		lua_pushcclosure(state, function, 1);
-		return 1;
+		return PushedObject{state, 1};
 	}
 
 private:
 	// callback that calls the function object
 	// this function is used by the callbacks and handles loading arguments from the stack and pushing the return value back
 	template<typename TFunctionObject>
-	static int callback(lua_State* state, TFunctionObject* toCall, int argumentsCount) {
+	static PushedObject callback(lua_State* state, TFunctionObject* toCall, int argumentsCount) {
 		// checking if number of parameters is correct
 		if (argumentsCount < LocalFunctionArgumentsCounter::min) {
 			// if not, using lua_error to return an error
@@ -2000,7 +2035,8 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::min);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-			return lua_error(state);
+			lua_error(state);
+			return PushedObject{state, 0};
 
 		} else if (argumentsCount > LocalFunctionArgumentsCounter::max) {
 			// if not, using lua_error to return an error
@@ -2009,7 +2045,8 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::max);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-			return lua_error(state);
+			lua_error(state);
+			return PushedObject{state, 0};
 		}
 
 		std::unique_ptr<typename Reader<std::tuple<TParameters...>>::ReturnType> parameters;
@@ -2025,7 +2062,8 @@ private:
 			lua_pushstring(state, " to ");
 			lua_pushstring(state, ex.destination.name());
 			lua_concat(state, 4);
-			return lua_error(state);
+			lua_error(state);
+			return PushedObject{state, 0};
 		}
 		
 		// calling the function, note that "result" should be a tuple
@@ -2036,8 +2074,9 @@ private:
 			return Pusher<typename std::decay<decltype(result)>::type>::push(state, std::move(result));
 
 		} catch (...) {
-			Pusher<std::exception_ptr>::push(state, std::current_exception());
-			return lua_error(state);
+			Pusher<std::exception_ptr>::push(state, std::current_exception()).release();
+			lua_error(state);
+			return PushedObject{state, 0};
 		}
 	}
 };
@@ -2053,7 +2092,7 @@ struct LuaContext::Pusher<TReturnType (*)(TParameters...)>
 	static const int maxSize = SubPusher::maxSize;
 
 	template<typename TType>
-	static int push(lua_State* state, TType value) {
+	static PushedObject push(lua_State* state, TType value) {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2069,7 +2108,7 @@ struct LuaContext::Pusher<TReturnType (&)(TParameters...)>
 	static const int maxSize = SubPusher::maxSize;
 
 	template<typename TType>
-	static int push(lua_State* state, TType value) {
+	static PushedObject push(lua_State* state, TType value) {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2084,7 +2123,7 @@ struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>>
 	static const int minSize = SubPusher::minSize;
 	static const int maxSize = SubPusher::maxSize;
 
-	static int push(lua_State* state, const std::function<TReturnType (TParameters...)>& value) {
+	static PushedObject push(lua_State* state, const std::function<TReturnType (TParameters...)>& value) {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2096,21 +2135,24 @@ struct LuaContext::Pusher<boost::variant<TTypes...>>
 	static const int minSize = PusherMinSize<TTypes...>::size;
 	static const int maxSize = PusherMaxSize<TTypes...>::size;
 
-	static int push(lua_State* state, const boost::variant<TTypes...>& value) {
-		VariantWriter writer{state};
-		return value.apply_visitor(writer);
+	static PushedObject push(lua_State* state, const boost::variant<TTypes...>& value) {
+		PushedObject obj{state, 0};
+		VariantWriter writer{state, obj};
+		value.apply_visitor(writer);
+		return std::move(obj);
 	}
 
 private:
-	struct VariantWriter : public boost::static_visitor<int> {
+	struct VariantWriter : public boost::static_visitor<> {
 		template<typename TType>
-		int operator()(TType value)
+		void operator()(TType value)
 		{
-			return Pusher<typename std::decay<TType>::type>::push(state, std::move(value));
+			obj = Pusher<typename std::decay<TType>::type>::push(state, std::move(value));
 		}
 
-		VariantWriter(lua_State* state) : state(state) {}
+		VariantWriter(lua_State* state, PushedObject& obj) : state(state), obj(obj) {}
 		lua_State* state;
+		PushedObject& obj;
 	};
 };
 
@@ -2123,12 +2165,12 @@ struct LuaContext::Pusher<boost::optional<TType>> {
 	static const int minSize = UnderlyingPusher::minSize < 1 ? UnderlyingPusher::minSize : 1;
 	static const int maxSize = UnderlyingPusher::maxSize > 1 ? UnderlyingPusher::maxSize : 1;
 
-	static int push(lua_State* state, const boost::optional<TType>& value) {
+	static PushedObject push(lua_State* state, const boost::optional<TType>& value) {
 		if (value) {
 			return UnderlyingPusher::push(state, value.get());
 		} else {
 			lua_pushnil(state);
-			return 1;
+			return PushedObject{state, 1};
 		}
 	}
 };
@@ -2139,45 +2181,37 @@ struct LuaContext::Pusher<std::tuple<TTypes...>> {
 	static const int minSize = PusherTotalMinSize<TTypes...>::size;
 	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
-	static int push(lua_State* state, const std::tuple<TTypes...>& value) {
+	static PushedObject push(lua_State* state, const std::tuple<TTypes...>& value) {
 		return push2(state, value, std::integral_constant<int,0>{});
 	}
 
-	static int push(lua_State* state, std::tuple<TTypes...>&& value) {
+	static PushedObject push(lua_State* state, std::tuple<TTypes...>&& value) {
 		return push2(state, std::move(value), std::integral_constant<int,0>{});
 	}
 
 private:
 	template<int N>
-	static int push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+	static PushedObject push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
-		const int pushed = Pusher<typename std::decay<ElemType>::type>::push(state, std::get<N>(value));
-		try {
-			return pushed + push2(state, value, std::integral_constant<int,N+1>{});
-		} catch(...) {
-			lua_pop(state, pushed);
-			throw;
-		}
+
+		return Pusher<typename std::decay<ElemType>::type>::push(state, std::get<N>(value)) +
+			push2(state, value, std::integral_constant<int,N+1>{});
 	}
 
 	template<int N>
-	static int push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
+	static PushedObject push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
-		const int pushed = Pusher<typename std::decay<ElemType>::type>::push(state, std::move(std::get<N>(value)));
-		try {
-			return pushed + push2(state, std::move(value), std::integral_constant<int,N+1>{});
-		} catch(...) {
-			lua_pop(state, pushed);
-			throw;
-		}
+
+		return Pusher<typename std::decay<ElemType>::type>::push(state, std::move(std::get<N>(value))) +
+			push2(state, std::move(value), std::integral_constant<int,N+1>{});
 	}
 	
-	static int push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
-		return 0;
+	static PushedObject push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return PushedObject{state, 0};
 	}
 	
-	static int push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
-		return 0;
+	static PushedObject push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return PushedObject{state, 0};
 	}
 };
 
