@@ -19,16 +19,10 @@ script:
   - make
   - ./tests
 env:
-  - LUA="liblua5.1-dev" CXX_FLAGS=""
-  - LUA="liblua5.1-dev" CXX_FLAGS="-fno-exceptions"
-  - LUA="liblua5.2-dev" CXX_FLAGS=""
-  - LUA="liblua5.2-dev" CXX_FLAGS="-fno-exceptions"
-  - LUA="libluajit-5.1-dev" CXX_FLAGS=""
-  - LUA="libluajit-5.1-dev" CXX_FLAGS="-fno-exceptions"
+  - LUA="liblua5.1-dev"
+  - LUA="liblua5.2-dev"
+  - LUA="libluajit-5.1-dev"
 matrix:
   allow_failures:
     - compiler: clang
-    - env: LUA="liblua5.1-dev" CXX_FLAGS="-fno-exceptions"
-    - env: LUA="liblua5.2-dev" CXX_FLAGS="-fno-exceptions"
-    - env: LUA="libluajit-5.1-dev" CXX_FLAGS=""
-    - env: LUA="libluajit-5.1-dev" CXX_FLAGS="-fno-exceptions"
+    - env: LUA="libluajit-5.1-dev"
