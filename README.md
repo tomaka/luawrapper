@@ -14,8 +14,8 @@ This library was designed to be very simple to use: you can write Lua variables 
 
 ### How to use it?
 This is a headers-only library.
-Simply include the file `include/LuaContext.hpp` in your code, and you can use the `LuaContext` class.
-You can also just copy-paste it into your own source code if you don't want to modify your include paths.
+Simply add the `include` directory to your include paths, and you can use the `LuaContext` class.
+You can also just copy-paste the files into your own project if you don't want to modify your include paths.
 
 The `include/misc/exception.hpp` file is required only for VC++.
 
@@ -394,6 +394,17 @@ Tuples are only supported when returning as a return value for a function. Attem
 The C++ equivalent for `nil` is `nullptr`.
 
 Note that `nullptr` has its own type, which is different from `0` and `NULL`.
+
+
+#### Threads
+
+Lua threads are not *real* threads, instead they allow you to have multiple execution contexts. This can be used to implement cooperative multitasking (not yet possible with this library) and/or to *fork* the global variables list.
+
+    LuaContext lua;
+    lua.writeVariable("a", 2);
+    
+    LuaContextThread thread1(&lua);
+    thread1.writeVariable("a", "hello");
 
 
 #### Custom member functions
