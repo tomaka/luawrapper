@@ -28,5 +28,7 @@ env:
 matrix:
   allow_failures:
     - compiler: clang
-    - env: LUA="libluajit-5.1-dev"
-    - env: CXX_FLAGS="-fno-exceptions"
+    - env: LUA="liblua5.1-dev" CXX_FLAGS="-fno-exceptions"
+    - env: LUA="liblua5.2-dev" CXX_FLAGS="-fno-exceptions"
+    - env: LUA="libluajit-5.1-dev" CXX_FLAGS=""
+    - env: LUA="libluajit-5.1-dev" CXX_FLAGS="-fno-exceptions"
