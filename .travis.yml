@@ -25,3 +25,4 @@ env:
 matrix:
   allow_failures:
     - compiler: clang
+    - env: LUA="libluajit-5.1-dev"
