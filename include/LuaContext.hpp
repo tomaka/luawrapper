@@ -1204,6 +1204,12 @@ private:
 	/**************************************************/
 	/*                PUSH FUNCTIONS                  */
 	/**************************************************/
+	template<typename T>
+	static PushedObject push(lua_State* state, T&& value)
+	{
+		return Pusher<typename std::decay<T>::type>::push(state, std::forward<T>(value));
+	}
+
 	// the Pusher structures allow you to push a value on the stack
 	//  - static const int minSize : minimum size on the stack that the value can have
 	//  - static const int maxSize : maximum size on the stack that the value can have
@@ -2148,7 +2154,7 @@ struct LuaContext::Pusher<boost::optional<TType>> {
 // tuple
 template<typename... TTypes>
 struct LuaContext::Pusher<std::tuple<TTypes...>> {
-	// TODO: NOT EXCEPTION SAFE /!\
+	// TODO: NOT EXCEPTION SAFE /!\ //
 	static const int minSize = PusherTotalMinSize<TTypes...>::size;
 	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
