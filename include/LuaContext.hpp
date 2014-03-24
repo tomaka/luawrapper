@@ -1333,7 +1333,8 @@ private:
 			// creating the metatable (over the object on the stack)
 			// lua_settable pops the key and value we just pushed, so stack management is easy
 			// all that remains on the stack after these function calls is the metatable
-			auto pushedTable = Pusher<EmptyArray_t>::push(state, EmptyArray);
+			lua_newtable(state);
+			PushedObject pushedTable{state, 1};
 
 			// using the garbage collecting function we created above
 			if (!boost::has_trivial_destructor<TType>::value)
