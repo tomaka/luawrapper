@@ -2148,40 +2148,41 @@ struct LuaContext::Pusher<boost::optional<TType>> {
 // tuple
 template<typename... TTypes>
 struct LuaContext::Pusher<std::tuple<TTypes...>> {
+	// TODO: NOT EXCEPTION SAFE /!\
 	static const int minSize = PusherTotalMinSize<TTypes...>::size;
 	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
 	static PushedObject push(lua_State* state, const std::tuple<TTypes...>& value) {
-		return push2(state, value, std::integral_constant<int,0>{});
+		return PushedObject{state, push2(state, value, std::integral_constant<int,0>{})};
 	}
 
 	static PushedObject push(lua_State* state, std::tuple<TTypes...>&& value) {
-		return push2(state, std::move(value), std::integral_constant<int,0>{});
+		return PushedObject{state, push2(state, std::move(value), std::integral_constant<int,0>{})};
 	}
 
 private:
 	template<int N>
-	static PushedObject push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+	static int push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
 
-		return Pusher<typename std::decay<ElemType>::type>::push(state, std::get<N>(value)) +
+		return Pusher<typename std::decay<ElemType>::type>::push(state, std::get<N>(value)).release() +
 			push2(state, value, std::integral_constant<int,N+1>{});
 	}
 
 	template<int N>
-	static PushedObject push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
+	static int push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
 
-		return Pusher<typename std::decay<ElemType>::type>::push(state, std::move(std::get<N>(value))) +
+		return Pusher<typename std::decay<ElemType>::type>::push(state, std::move(std::get<N>(value))).release() +
 			push2(state, std::move(value), std::integral_constant<int,N+1>{});
 	}
 	
-	static PushedObject push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
-		return PushedObject{state, 0};
+	static int push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return 0;
 	}
 	
-	static PushedObject push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
-		return PushedObject{state, 0};
+	static int push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
+		return 0;
 	}
 };
 
