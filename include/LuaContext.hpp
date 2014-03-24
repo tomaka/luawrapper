@@ -1795,18 +1795,13 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
 	static PushedObject push(lua_State* state, const std::map<TKey,TValue>& value) {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
-
-		lua_newtable(state);
-
-		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			auto p1 = Pusher<typename std::decay<TKey>::type>::push(state, i->first);
-			auto p2 = Pusher<typename std::decay<TValue>::type>::push(state, i->second);
-			lua_settable(state, -3);
-			p1.release();
-			p2.release();
-		}
 		
-		return PushedObject{state, 1};
+		auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
+
+		for (auto i = value.begin(), e = value.end(); i != e; ++i)
+			setTable<TValue>(state, -1, i->first, i->second);
+		
+		return std::move(obj);
 	}
 };
 
@@ -1819,18 +1814,13 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 	static PushedObject push(lua_State* state, const std::unordered_map<TKey,TValue>& value) {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
-
-		lua_newtable(state);
-
-		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			auto p1 = Pusher<typename std::decay<TKey>::type>::push(state, i->first);
-			auto p2 = Pusher<typename std::decay<TValue>::type>::push(state, i->second);
-			lua_settable(state, -3);
-			p1.release();
-			p2.release();
-		}
 		
-		return PushedObject{state, 1};
+		auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
+
+		for (auto i = value.begin(), e = value.end(); i != e; ++i)
+			setTable<TValue>(state, -1, i->first, i->second);
+		
+		return std::move(obj);
 	}
 };
 
@@ -1844,17 +1834,12 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
 		static_assert(Pusher<typename std::decay<TType1>::type>::minSize == 1 && Pusher<typename std::decay<TType1>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TType2>::type>::minSize == 1 && Pusher<typename std::decay<TType2>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
-		lua_newtable(state);
+		auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
-		for (auto i = value.begin(), e = value.end(); i != e; ++i) {
-			auto p1 = Pusher<typename std::decay<TType1>::type>::push(state, i->first);
-			auto p2 = Pusher<typename std::decay<TType2>::type>::push(state, i->second);
-			lua_settable(state, -3);
-			p1.release();
-			p2.release();
-		}
+		for (auto i = value.begin(), e = value.end(); i != e; ++i)
+			setTable<TType2>(state, -1, i->first, i->second);
 		
-		return PushedObject{state, 1};
+		return std::move(obj);
 	}
 };
 
@@ -1867,16 +1852,12 @@ struct LuaContext::Pusher<std::vector<TType>> {
 	static PushedObject push(lua_State* state, const std::vector<TType>& value) {
 		static_assert(Pusher<typename std::decay<TType>::type>::minSize == 1 && Pusher<typename std::decay<TType>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
-		lua_newtable(state);
+		auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
-		for (unsigned int i = 0; i < value.size(); ++i) {
-			lua_pushinteger(state, i + 1);
-			auto p1 = Pusher<typename std::decay<TType>::type>::push(state, value[i]);
-			lua_settable(state, -3);
-			p1.release();
-		}
+		for (unsigned int i = 0; i < value.size(); ++i)
+			setTable<TType>(state, -1, i + 1, value[i]);
 		
-		return PushedObject{state, 1};
+		return std::move(obj);
 	}
 };
 
