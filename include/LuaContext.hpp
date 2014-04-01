@@ -844,7 +844,7 @@ private:
 	static auto readTopAndPop(lua_State* state, PushedObject object)
 		-> TReturnType
 	{
-		auto val = Reader<typename std::decay<TReturnType>::type>::testRead(state, -object.getNum());
+		auto val = Reader<typename std::decay<TReturnType>::type>::read(state, -object.getNum());
 		if (!val.is_initialized())
 			throw WrongTypeException{lua_typename(state, lua_type(state, -object.getNum())), typeid(TReturnType)};
 		return val.get();
@@ -1442,9 +1442,18 @@ private:
 	
 	template<typename TType, typename = void>
 	struct Reader {
-		using ReturnType =
-			typename std::conditional<std::is_pointer<TType>::value, TType, TType&>::type;
+		typedef typename std::conditional<std::is_pointer<TType>::value, TType, TType&>::type
+			ReturnType;
 		
+		static auto read(lua_State* state, int index)
+			-> boost::optional<ReturnType>
+		{
+			if (!test(state, index))
+				return boost::none;
+			return boost::optional<ReturnType>(*static_cast<TType*>(lua_touserdata(state, index)));
+		}
+
+	private:
 		static bool test(lua_State* state, int index)
 		{
 			if (!lua_isuserdata(state, index))
@@ -1465,28 +1474,6 @@ private:
 				return false;
 
 			return true;
-		}
-
-		static auto read(lua_State* state, int index)
-			-> ReturnType
-		{
-			return *static_cast<TType*>(lua_touserdata(state, index));
-		}
-
-		static auto testRead(lua_State* state, int index)
-			-> boost::optional<ReturnType>
-		{
-			if (!test(state, index))
-				return {};
-			return read(state, index);
-		}
-
-		static auto readSafe(lua_State* state, int index)
-			-> ReturnType
-		{
-			if (!test(state, index))
-				throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(TType)};
-			return read(state, index);
 		}
 	};
 
@@ -2024,20 +2011,18 @@ private:
 			lua_error(state);
 			return PushedObject{state, 0};
 		}
-
-		std::unique_ptr<typename Reader<std::tuple<TParameters...>>::ReturnType> parameters;
+		
 		// reading parameters from the stack
-		try {
-			parameters.reset(new typename Reader<std::tuple<TParameters...>>::ReturnType(Reader<std::tuple<TParameters...>>::readSafe(state, -argumentsCount, argumentsCount)));
-
-		} catch (const WrongTypeException& ex) {
+		auto parameters = Reader<std::tuple<TParameters...>>::read(state, -argumentsCount, argumentsCount);
+		if (!parameters) {
 			// wrong parameter type, using lua_error to return an error
 			luaL_where(state, 1);
-			lua_pushstring(state, "Unable to convert parameter from ");
+			/*lua_pushstring(state, "Unable to convert parameter from ");
 			lua_pushstring(state, ex.luaType.c_str());
 			lua_pushstring(state, " to ");
 			lua_pushstring(state, ex.destination.name());
-			lua_concat(state, 4);
+			lua_concat(state, 4);*/
+			lua_pushstring(state, "Unable to convert some of the parameters");
 			lua_error(state);
 			return PushedObject{state, 0};
 		}
@@ -2203,30 +2188,11 @@ struct LuaContext::Reader<std::nullptr_t>
 {
 	using ReturnType = std::nullptr_t;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isnil(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> std::nullptr_t
-	{
-		return nullptr;
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<std::nullptr_t>
 	{
-		if (!test(state, index))
-			return {};
-		return nullptr;
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> std::nullptr_t
-	{
-		if (!test(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(std::nullptr_t)};
+		if (!lua_isnil(state, index))
+			return boost::none;
 		return nullptr;
 	}
 };
@@ -2240,35 +2206,15 @@ struct LuaContext::Reader<
 {
 	using ReturnType = TType;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isnumber(state, index) && fmod(lua_tonumber(state, index), 1.) == 0;
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> TType
-	{
-		return lua_tointeger(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<TType>
 	{
 		if (!lua_isnumber(state, index))
-			return {};
+			return boost::none;
 		const auto nb = lua_tonumber(state, index);
 		if (fmod(nb, 1.f) != 0)
-			return {};
+			return boost::none;
 		return static_cast<TType>(nb);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> TType
-	{
-		const auto val = testRead(state, index);
-		if (!val)
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(TType)};
-		return val.get();
 	}
 };
 
@@ -2281,31 +2227,12 @@ struct LuaContext::Reader<
 {
 	using ReturnType = TType;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isnumber(state, index) != 0;
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> TType
-	{
-		return static_cast<TType>(lua_tonumber(state, index));
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<TType>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> TType
-	{
-		if (!test(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(TType)};
-		return read(state, index);
+		if (lua_isnumber(state, index) == 0)
+			return boost::none;
+		return static_cast<TType>(lua_tonumber(state, index));
 	}
 };
 
@@ -2315,31 +2242,12 @@ struct LuaContext::Reader<bool>
 {
 	using ReturnType = bool;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isboolean(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> bool
-	{
-		return lua_toboolean(state, index) != 0;
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<bool>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> bool
-	{
-		if (!test(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(bool)};
-		return read(state, index);
+		if (!lua_isboolean(state, index))
+			return boost::none;
+		return lua_toboolean(state, index) != 0;
 	}
 };
 
@@ -2351,32 +2259,12 @@ struct LuaContext::Reader<std::string>
 {
 	using ReturnType = std::string;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isstring(state, index) != 0;
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> std::string
-	{
-		return lua_tostring(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<std::string>
 	{
 		const auto val = lua_tostring(state, index);
 		if (val == 0)
-			return {};
-		return std::string(val);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> std::string
-	{
-		const auto val = lua_tostring(state, index);
-		if (val == 0)
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(std::string)};
+			return boost::none;
 		return std::string(val);
 	}
 };
@@ -2390,31 +2278,12 @@ struct LuaContext::Reader<
 {
 	using ReturnType = TType;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isnumber(state, index) != 0 && fmod(lua_tonumber(state, index), 1.) == 0;
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> TType
-	{
-		return static_cast<TType>(lua_tointeger(state, index));
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<TType>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> TType
-	{
-		if (!test(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(TType)};
-		return read(state, index);
+		if (!lua_isnumber(state, index) != 0 || fmod(lua_tonumber(state, index), 1.) != 0)
+			return boost::none;
+		return static_cast<TType>(lua_tointeger(state, index));
 	}
 };
 
@@ -2425,31 +2294,12 @@ struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters..
 	typedef LuaFunctionCaller<TRetValue (TParameters...)>
 		ReturnType;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isfunction(state, index) != 0;
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return ReturnType(state);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		if (!test(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(ReturnType)};
-		return read(state, index);
+		if (lua_isfunction(state, index) == 0 && lua_isuserdata(state, index) == 0)
+			return boost::none;
+		return ReturnType(state);
 	}
 };
 
@@ -2457,32 +2307,15 @@ struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters..
 template<typename TRetValue, typename... TParameters>
 struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 {
-	using SubReader =
-		Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>;
-	using ReturnType =
-		typename SubReader::ReturnType;
+	typedef Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>
+		SubReader;
+	typedef typename SubReader::ReturnType
+		ReturnType;
 
-	static bool test(lua_State* state, int index)
-	{
-		return SubReader::test(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return SubReader::read(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		return SubReader::testRead(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		return SubReader::readSafe(state, index);
+		return SubReader::read(state, index);
 	}
 };
 
@@ -2496,23 +2329,12 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 		Type2Reader;
 	using ReturnType =
 		std::vector<std::pair<typename Type1Reader::ReturnType, typename Type2Reader::ReturnType>>;
-
-	static bool test(lua_State* state, int index)
-	{
-		return lua_istable(state, index);
-	}
 	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return readSafe(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
+		if (!lua_istable(state, index))
+			return boost::none;
 
 		ReturnType result;
 
@@ -2521,8 +2343,8 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
 			try {
-				auto val1 = Type1Reader::testRead(state, -2);
-				auto val2 = Type2Reader::testRead(state, -1);
+				auto val1 = Type1Reader::read(state, -2);
+				auto val2 = Type2Reader::read(state, -1);
 
 				if (!val1.is_initialized() || !val2.is_initialized()) {
 					lua_pop(state, 2);		// we remove the value and the key
@@ -2540,34 +2362,6 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 
 		return { std::move(result) };
 	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		if (!lua_istable(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(ReturnType)};
-
-		ReturnType result;
-
-		// we traverse the table at the top of the stack
-		lua_pushnil(state);		// first key
-		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
-			// now a key and its value are pushed on the stack
-			try {
-				auto val1 = Type1Reader::readSafe(state, -2);
-				auto val2 = Type2Reader::readSafe(state, -1);
-				
-				result.push_back({ std::move(val1), std::move(val2) });
-				lua_pop(state, 1);		// we remove the value but keep the key for the next iteration
-
-			} catch(...) {
-				lua_pop(state, 2);		// we remove the value and the key
-				throw;
-			}
-		}
-
-		return std::move(result);
-	}
 };
 
 // map
@@ -2580,23 +2374,12 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 		ValueReader;
 	using ReturnType =
 		std::map<typename KeyReader::ReturnType, typename ValueReader::ReturnType>;
-
-	static bool test(lua_State* state, int index)
-	{
-		return lua_istable(state, index);
-	}
 	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return readSafe(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
+		if (!lua_istable(state, index))
+			return boost::none;
 
 		ReturnType result;
 
@@ -2605,8 +2388,8 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
 			try {
-				auto key = KeyReader::testRead(state, -2);
-				auto value = ValueReader::testRead(state, -1);
+				auto key = KeyReader::read(state, -2);
+				auto value = ValueReader::read(state, -1);
 
 				if (!key.is_initialized() || !value.is_initialized()) {
 					lua_pop(state, 2);		// we remove the value and the key
@@ -2623,34 +2406,6 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 		}
 
 		return { std::move(result) };
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		if (!lua_istable(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(ReturnType)};
-
-		ReturnType result;
-
-		// we traverse the table at the top of the stack
-		lua_pushnil(state);		// first key
-		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
-			// now a key and its value are pushed on the stack
-			try {
-				auto key = KeyReader::readSafe(state, -2);
-				auto value = ValueReader::readSafe(state, -1);
-				
-				result.insert({ std::move(key), std::move(value) });
-				lua_pop(state, 1);		// we remove the value but keep the key for the next iteration
-
-			} catch(...) {
-				lua_pop(state, 2);		// we remove the value and the key
-				throw;
-			}
-		}
-
-		return std::move(result);
 	}
 };
 
@@ -2665,22 +2420,11 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 	using ReturnType =
 		std::unordered_map<typename KeyReader::ReturnType, typename ValueReader::ReturnType>;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_istable(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return readSafe(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
+		if (!lua_istable(state, index))
+			return boost::none;
 
 		ReturnType result;
 
@@ -2689,8 +2433,8 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
 			// now a key and its value are pushed on the stack
 			try {
-				auto key = KeyReader::testRead(state, -2);
-				auto value = ValueReader::testRead(state, -1);
+				auto key = KeyReader::read(state, -2);
+				auto value = ValueReader::read(state, -1);
 
 				if (!key.is_initialized() || !value.is_initialized()) {
 					lua_pop(state, 2);		// we remove the value and the key
@@ -2708,37 +2452,13 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 
 		return { std::move(result) };
 	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		ReturnType result;
-
-		if (!lua_istable(state, index))
-			throw WrongTypeException{lua_typename(state, lua_type(state, index)), typeid(ReturnType)};
-
-		// we traverse the table at the top of the stack
-		lua_pushnil(state);		// first key
-		while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
-			// now a key and its value are pushed on the stack
-			try {
-				auto key = KeyReader::readSafe(state, -2);
-				auto value = ValueReader::readSafe(state, -1);
-				
-				result.insert({ std::move(key.get()), std::move(value.get()) });
-				lua_pop(state, 1);		// we remove the value but keep the key for the next iteration
-
-			} catch(...) {
-				lua_pop(state, 2);		// we remove the value and the key
-				throw;
-			}
-		}
-
-		return std::move(result);
-	}
 };
 
 // optional
+// IMPORTANT: optional means "either nil or the value of the right type"
+//  * if the value is nil, then an optional containing an empty optional is returned
+//  * if the value is of the right type, then an optional containing an optional containing the value is returned
+//  * if the value is of the wrong type, then an empty optional is returned
 template<typename TType>
 struct LuaContext::Reader<boost::optional<TType>>
 {
@@ -2747,27 +2467,14 @@ struct LuaContext::Reader<boost::optional<TType>>
 	using ReturnType =
 		boost::optional<typename SubReader::ReturnType>;
 
-	static bool test(lua_State* state, int index)
-	{
-		return lua_isnil(state, index) || SubReader::test(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return lua_isnil(state, index) ? ReturnType{} : ReturnType{SubReader::read(state, index)};
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		return lua_isnil(state, index) ? ReturnType{} : ReturnType{SubReader::testRead(state, index)};
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		return lua_isnil(state, index) ? ReturnType{} : ReturnType{SubReader::readSafe(state, index)};
+		if (lua_isnil(state, index))
+			return ReturnType{boost::none};
+		if (auto&& other = SubReader::read(state, index))
+			return std::move(other);
+		return boost::none;
 	}
 };
 
@@ -2800,29 +2507,13 @@ private:
 	{
 		using SubReader = Reader<typename std::decay<typename boost::mpl::deref<TIterBegin>::type>::type>;
 
-		static auto readSafe(lua_State* state, int index)
-			-> ReturnType
-		{
-			// note: using SubReader::testRead triggers a compilation error when used with a reference
-			if (SubReader::test(state, index))
-				return ReturnType{SubReader::read(state, index)};
-			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::readSafe(state, index);
-		}
-
-		static auto testRead(lua_State* state, int index)
+		static auto read(lua_State* state, int index)
 			-> boost::optional<ReturnType>
 		{
-			// note: using SubReader::testRead triggers a compilation error when used with a reference
-			if (SubReader::test(state, index))
-				return ReturnType{SubReader::read(state, index)};
-			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::testRead(state, index);
-		}
-		
-		static bool test(lua_State* state, int index)
-		{
-			if (SubReader::test(state, index))
-				return true;
-			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::test(state, index);
+			// note: using SubReader::read triggers a compilation error when used with a reference
+			if (const auto val = SubReader::read(state, index))
+				return ReturnType{*val};
+			return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::read(state, index);
 		}
 	};
 
@@ -2830,21 +2521,10 @@ private:
 	template<typename TIterBegin, typename TIterEnd>
 	struct VariantReader<TIterBegin, TIterEnd, typename std::enable_if<boost::mpl::distance<TIterBegin, TIterEnd>::type::value == 0>::type>
 	{
-		static auto readSafe(lua_State* state, int index)
-			-> ReturnType
-		{
-			throw WrongTypeException(lua_typename(state, lua_type(state, index)), typeid(ReturnType));
-		}
-
-		static auto testRead(lua_State* state, int index)
+		static auto read(lua_State* state, int index)
 			-> boost::optional<ReturnType> 
 		{
-			return {};
-		}
-		
-		static bool test(lua_State* state, int index)
-		{
-			return false;
+			return boost::none;
 		}
 	};
 
@@ -2853,27 +2533,10 @@ private:
 		MainVariantReader;
 
 public:
-	static bool test(lua_State* state, int index)
-	{
-		return MainVariantReader::test(state, index);
-	}
-	
 	static auto read(lua_State* state, int index)
-		-> ReturnType
-	{
-		return readSafe(state, index);
-	}
-
-	static auto testRead(lua_State* state, int index)
 		-> boost::optional<ReturnType>
 	{
-		return MainVariantReader::testRead(state, index);
-	}
-
-	static auto readSafe(lua_State* state, int index)
-		-> ReturnType
-	{
-		return MainVariantReader::readSafe(state, index);
+		return MainVariantReader::read(state, index);
 	}
 };
 
@@ -2884,28 +2547,11 @@ template<>
 struct LuaContext::Reader<std::tuple<>>
 {
 	using ReturnType = std::tuple<>;
-
-	static bool test(lua_State* state, int index, int maxSize = 0)
-	{
-		return true;
-	}
 	
 	static auto read(lua_State* state, int index, int maxSize = 0)
-		-> std::tuple<>
-	{
-		return {};
-	}
-
-	static auto testRead(lua_State* state, int index, int maxSize = 0)
 		-> boost::optional<std::tuple<>>
 	{
 		return std::tuple<>{};
-	}
-
-	static auto readSafe(lua_State* state, int index, int maxSize = 0)
-		-> std::tuple<>
-	{
-		return {};
 	}
 };
 
@@ -2922,41 +2568,20 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
 		TOthersReader;
 	typedef decltype(std::tuple_cat(std::declval<std::tuple<typename TFirstReader::ReturnType>>(), std::declval<typename TOthersReader::ReturnType>()))
 		ReturnType;
-
-	static bool test(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-	{
-		if (maxSize <= 0)
-			return false;
-		return TFirstReader::test(state, index) && TOthersReader::test(state, index + 1, maxSize - 1);
-	}
 	
 	static auto read(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-		-> ReturnType
-	{
-		if (maxSize <= 0)
-			throw WrongTypeException{"null", typeid(std::tuple<TFirst,TOthers...>)};
-		return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(TFirstReader::read(state, index)), TOthersReader::read(state, index + 1, maxSize - 1));
-	}
-
-	static auto testRead(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
+		if (maxSize <= 0)
+			return boost::none;
 
-	static auto readSafe(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-		-> ReturnType
-	{
-		try {
-			if (maxSize <= 0)
-				throw std::logic_error("Trying to read null into non-default-constructible type");
-			return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(TFirstReader::readSafe(state, index)), TOthersReader::readSafe(state, index + 1, maxSize - 1));
+		auto firstVal = TFirstReader::read(state, index);
+		auto othersVal = TOthersReader::read(state, index + 1, maxSize - 1);
+		
+		if (!firstVal || !othersVal)
+			return boost::none;
 
-		} catch(...) {
-			std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
-		}
+		return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(std::forward<typename TFirstReader::ReturnType>(*firstVal)), std::move(*othersVal));
 	}
 };
 
@@ -2974,40 +2599,21 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
 	typedef decltype(std::tuple_cat(std::declval<std::tuple<typename TFirstReader::ReturnType>>(), std::declval<typename TOthersReader::ReturnType>()))
 		ReturnType;
 
-	static bool test(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-	{
-		if (maxSize <= 0)
-			return true;
-		return TFirstReader::test(state, index) && TOthersReader::test(state, index + 1, maxSize - 1);
-	}
-	
 	static auto read(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-		-> ReturnType
-	{
-		if (maxSize <= 0)
-			return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(), TOthersReader::read(state, index + 1, maxSize - 1));
-		return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(TFirstReader::read(state, index)), TOthersReader::read(state, index + 1, maxSize - 1));
-	}
-
-	static auto testRead(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
 		-> boost::optional<ReturnType>
 	{
-		if (!test(state, index))
-			return {};
-		return read(state, index);
-	}
+		auto othersVal = TOthersReader::read(state, index + 1, maxSize - 1);
+		if (!othersVal)
+			return boost::none;
+		
+		if (maxSize <= 0)
+			return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(), std::move(*othersVal));
+		
+		auto firstVal = TFirstReader::read(state, index);
+		if (!firstVal)
+			return boost::none;
 
-	static auto readSafe(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
-		-> ReturnType
-	{
-		try {
-			if (maxSize <= 0)
-				return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(), TOthersReader::readSafe(state, index + 1, maxSize - 1));
-			return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(TFirstReader::readSafe(state, index)), TOthersReader::readSafe(state, index + 1, maxSize - 1));
-
-		} catch(...) {
-			std::throw_with_nested(WrongTypeException{"unknown", typeid(std::tuple<TFirst,TOthers...>)});
-		}
+		return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(std::forward<typename TFirstReader::ReturnType>(*firstVal)), std::move(*othersVal));
 	}
 };
 
