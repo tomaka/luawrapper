@@ -882,6 +882,19 @@ private:
 
 		lua_settable(state, LUA_REGISTRYINDEX);
 	}
+
+	// 
+#	ifdef _MSC_VER
+		__declspec(noreturn)
+#	else
+		[[noreturn]]
+#	endif
+	static void luaError(lua_State* state)
+	{
+		lua_error(state);
+		assert(false);
+		std::terminate();	// removes compilation warning
+	}
 	
 
 	/**************************************************/
@@ -1275,7 +1288,7 @@ private:
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(lua, std::current_exception()).release();
-					return lua_error(lua);
+					luaError(lua);
 				}
 			};
 
@@ -1311,7 +1324,7 @@ private:
 					{
 						lua_pop(lua, 2);
 						lua_pushstring(lua, "No setter found");
-						return lua_error(lua);
+						luaError(lua);
 					}
 					lua_pushvalue(lua, 1);
 					lua_pushvalue(lua, 2);
@@ -1322,7 +1335,7 @@ private:
 
 				} catch (...) {
 					Pusher<std::exception_ptr>::push(lua, std::current_exception()).release();
-					return lua_error(lua);
+					luaError(lua);
 				}
 			};
 
@@ -1998,8 +2011,7 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::min);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-			lua_error(state);
-			return PushedObject{state, 0};
+			luaError(state);
 
 		} else if (argumentsCount > LocalFunctionArgumentsCounter::max) {
 			// if not, using lua_error to return an error
@@ -2008,8 +2020,7 @@ private:
 			lua_pushnumber(state, LocalFunctionArgumentsCounter::max);
 			lua_pushstring(state, " parameter(s)");
 			lua_concat(state, 4);
-			lua_error(state);
-			return PushedObject{state, 0};
+			luaError(state);
 		}
 		
 		// reading parameters from the stack
@@ -2023,8 +2034,7 @@ private:
 			lua_pushstring(state, ex.destination.name());
 			lua_concat(state, 4);*/
 			lua_pushstring(state, "Unable to convert some of the parameters");
-			lua_error(state);
-			return PushedObject{state, 0};
+			luaError(state);
 		}
 		
 		// calling the function, note that "result" should be a tuple
@@ -2036,8 +2046,7 @@ private:
 
 		} catch (...) {
 			Pusher<std::exception_ptr>::push(state, std::current_exception()).release();
-			lua_error(state);
-			return PushedObject{state, 0};
+			luaError(state);
 		}
 	}
 };
