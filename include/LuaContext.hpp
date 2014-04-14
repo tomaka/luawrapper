@@ -2204,7 +2204,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_integral<TType>::value>::type
 		>
 {
-	using ReturnType = lua_Integer;
+	using ReturnType = TType;
 
 	static auto read(lua_State* state, int index)
 		-> boost::optional<TType>
@@ -2225,7 +2225,7 @@ struct LuaContext::Reader<
 			typename std::enable_if<std::is_floating_point<TType>::value>::type
 		>
 {
-	using ReturnType = lua_Number;
+	using ReturnType = TType;
 
 	static auto read(lua_State* state, int index)
 		-> boost::optional<TType>
