@@ -17,8 +17,8 @@ TEST(BasicReadWrite, Doubles) {
 	context.writeVariable("a", 5.4);
 	EXPECT_DOUBLE_EQ(5.4, context.readVariable<double>("a"));
 	
-	context.writeVariable("b", -6.72);
-	EXPECT_DOUBLE_EQ(-6.72, context.readVariable<double>("b"));
+	context.writeVariable("b", -6.72f);
+	EXPECT_DOUBLE_EQ(-6.72f, context.readVariable<float>("b"));
 }
 
 TEST(BasicReadWrite, Booleans) {
