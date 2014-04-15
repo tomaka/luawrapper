@@ -30,8 +30,11 @@ TEST(AdvancedReadWrite, ReadingOptional) {
 	LuaContext context;
 	
     context.writeVariable("a", 3);
+    context.writeVariable("b", "test");
+
 	EXPECT_EQ(3, context.readVariable<boost::optional<int>>("a").get());
-	EXPECT_FALSE(context.readVariable<boost::optional<int>>("b").is_initialized());
+	EXPECT_THROW(context.readVariable<boost::optional<int>>("b"), LuaContext::WrongTypeException);
+	EXPECT_FALSE(context.readVariable<boost::optional<int>>("c").is_initialized());
 }
 
 TEST(AdvancedReadWrite, EmptyArray) {
