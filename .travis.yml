@@ -11,11 +11,11 @@ before_install:
   - sudo apt-get install $LUA
   - 'if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi'
   - 'if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi'
-script:
   - mkdir build
   - cd build
   - $CXX --version
   - cmake -DCMAKE_CXX_FLAGS="-Wall $CXX_FLAGS" ..
+script:
   - make
   - ./tests
 env:
