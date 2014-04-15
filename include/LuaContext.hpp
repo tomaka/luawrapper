@@ -2039,10 +2039,10 @@ private:
 		
 		// calling the function, note that "result" should be a tuple
 		try {
-			auto result = callWithTuple<TReturnType>(*toCall, *parameters);
-
 			// pushing the result on the stack and returning number of pushed elements
-			return Pusher<typename std::decay<decltype(result)>::type>::push(state, std::move(result));
+			typedef Pusher<typename std::decay<decltype(callWithTuple<TReturnType>(*toCall, *parameters))>::type>
+				P;
+			return P::push(state, callWithTuple<TReturnType>(*toCall, *parameters));
 
 		} catch (...) {
 			Pusher<std::exception_ptr>::push(state, std::current_exception()).release();
