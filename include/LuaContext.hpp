@@ -1605,15 +1605,11 @@ private:
         }
 
         const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
+        if (!firstElem)
+			throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
 
-        if (!firstElem) {
-            Binder<TCallback, const TFirstType&> binder{ callback, {} };
-            return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
-
-        } else {
-            Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
-            return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
-        }
+        Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
+        return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
     }
     template<typename TRetValue, typename TCallback, typename TFirstType, typename... TTypes>
     static auto readIntoFunction(lua_State* state, tag<TRetValue> retValueTag, TCallback&& callback, int index, tag<TFirstType>, tag<TTypes>... othersTags)
@@ -1624,7 +1620,8 @@ private:
 
         const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
         if (!firstElem)
-            throw std::logic_error("Unable to read");
+			throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
+
         Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
         return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
     }
@@ -2203,24 +2200,20 @@ private:
             lua_concat(state, 4);
             luaError(state);
         }
-        
-        // reading parameters from the stack
-        auto parameters = Reader<std::tuple<TParameters...>>::read(state, -argumentsCount, argumentsCount);
-        if (!parameters) {
-            // wrong parameter type, using lua_error to return an error
-            luaL_where(state, 1);
-            /*lua_pushstring(state, "Unable to convert parameter from ");
-            lua_pushstring(state, ex.luaType.c_str());
-            lua_pushstring(state, " to ");
-            lua_pushstring(state, ex.destination.name());
-            lua_concat(state, 4);*/
-            lua_pushstring(state, "Unable to convert some of the parameters");
-            luaError(state);
-        }
-        
+                
         // calling the function
         try {
             return callback2(state, *toCall, argumentsCount);
+
+		} catch (const WrongTypeException& ex) {
+            // wrong parameter type, using lua_error to return an error
+            luaL_where(state, 1);
+            lua_pushstring(state, "Unable to convert parameter from ");
+            lua_pushstring(state, ex.luaType.c_str());
+            lua_pushstring(state, " to ");
+            lua_pushstring(state, ex.destination.name());
+            lua_concat(state, 4);
+            luaError(state);
 
         } catch (...) {
             Pusher<std::exception_ptr>::push(state, std::current_exception()).release();
