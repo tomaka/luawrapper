@@ -472,7 +472,7 @@ Remember that you can return `std::function` from the read callback, allowing yo
 
 ### Clean assembly generation
 
-This library is heavily-templated, which means that it may take additional time to compile but will generate very clean assembly code.
+This library is heavily-templated, which means that it may take additional time to compile but will generate clean assembly code.
 
 For example this:
 
@@ -485,7 +485,7 @@ Will generate something like this:
     movl    $-1001000, 4(%esp)
     call    lua_rawgeti
     movl    %ebx, (%esp)
-    movl    $.LC0, 4(%esp)      // contains "test"
+    movl    $.LC0, 4(%esp)      # contains "test"
     call    lua_pushstring
     movl    %ebx, (%esp)
     movl    $-2, 4(%esp)
@@ -494,12 +494,74 @@ Will generate something like this:
     movl    $12, 4(%esp)
     call    lua_pushinteger
     movl    %ebx, (%esp)
-    movl    $.LC1, 8(%esp)      // contains "a"
+    movl    $.LC1, 8(%esp)      # contains "a"
     movl    $-2, 4(%esp)
     call    lua_setfield
     movl    %ebx, (%esp)
     movl    $-3, 4(%esp)
     call    lua_settop
+
+Another example. This code:
+
+    lua.writeFunction("foo", [](int a) { return a + 1; });
+
+Will generate this in the main function:
+
+    movl    %ebx, (%esp)
+    movl    $_ZZ4mainENUliE_4_FUNEi, 4(%esp)
+    call    lua_pushlightuserdata
+    movl    %ebx, (%esp)
+    movl    $1, 8(%esp)
+    movl    $_ZZN10LuaContext6PusherIFiiEvE4pushEP9lua_StatePS1_ENUlS4_E_4_FUNES4_, 4(%esp)
+    call    lua_pushcclosure
+    movl    %ebx, (%esp)
+    movl    $.LC3, 4(%esp)
+    call    lua_setglobal
+
+And this helper function:
+
+        pushl   %ebp
+        movl    %esp, %ebp
+        pushl   %edi
+        pushl   %esi
+        pushl   %ebx
+        subl    $44, %esp
+        movl    8(%ebp), %ebx
+        movl    $-1001001, 4(%esp)
+        movl    %ebx, (%esp)
+        call    lua_touserdata
+        movl    %ebx, (%esp)
+        movl    %eax, %esi
+        call    lua_gettop
+        testl   %eax, %eax
+        jle .L488               # handling not enough parameters
+        cmpl    $1, %eax
+        jne .L489               # handling too many parameters
+        movl    $-1, 4(%esp)
+        movl    %ebx, (%esp)
+        call    lua_isnumber
+        testl   %eax, %eax
+        jne .L465
+        ...                     # skipped code for wrong parameter type
+    .L465:
+        movl    $0, 8(%esp)
+        movl    $-1, 4(%esp)
+        movl    %ebx, (%esp)
+        call    lua_tointegerx
+        movl    %eax, (%esp)
+        call    *%esi            # calls foo()
+        movl    %eax, 4(%esp)
+        movl    %ebx, (%esp)
+        call    lua_pushinteger
+        leal    -12(%ebp), %esp
+        movl    $1, %eax
+        popl    %ebx
+        popl    %esi
+        popl    %edi
+        popl    %ebp
+        ret
+
+(generated with `g++-4.8 -O3 -NDEBUG -std=c++11`)
 
 
 ### Compilation
