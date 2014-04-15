@@ -79,7 +79,8 @@ public:
 	{
 		// luaL_newstate can return null if allocation failed
 		mState = luaL_newstate();
-		if (mState == nullptr)		throw std::bad_alloc();
+		if (mState == nullptr)
+			throw std::bad_alloc();
 
 		// setting the panic function
 		lua_atpanic(mState, [](lua_State* state) -> int {
@@ -106,7 +107,7 @@ public:
 	/**
 	 * Move operator
 	 */
-	LuaContext& operator=(LuaContext&& s)
+	LuaContext& operator=(LuaContext&& s) noexcept
 	{
 		std::swap(mState, s.mState);
 		return *this;
@@ -125,7 +126,7 @@ public:
 	/**
 	 * Destructor
 	 */
-	~LuaContext()
+	~LuaContext() noexcept
 	{
 		assert(mState);
 		lua_close(mState);
@@ -624,7 +625,7 @@ public:
 	 * All objects are passed by copy and destroyed by the garbage collector if necessary.
 	 */
 	template<typename... TData>
-	void writeVariable(TData&&... data) {
+	void writeVariable(TData&&... data) noexcept {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeVariable");
 		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
 			RealDataType;
@@ -644,7 +645,7 @@ public:
 	 * This version is more effecient than writeVariable if you want to write functions
 	 */
 	template<typename TFunctionType, typename... TData>
-	void writeFunction(TData&&... data) {
+	void writeFunction(TData&&... data) noexcept {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
 		
 #		if LUA_VERSION_NUM >= 502
@@ -661,7 +662,7 @@ public:
 	 * This only works if the data is either a native function pointer, or contains one operator() (this is the case for lambdas)
 	 */
 	template<typename... TData>
-	void writeFunction(TData&&... data) {
+	void writeFunction(TData&&... data) noexcept {
 		static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
 		typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
 			RealDataType;
@@ -744,7 +745,7 @@ private:
 	// the dataPusher MUST push only one thing on the stack
 	// TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
 	template<typename TDataType, typename TIndex, typename TData>
-	static void setTable(lua_State* state, int tableIndex, TIndex&& index, TData&& data)
+	static void setTable(lua_State* state, int tableIndex, TIndex&& index, TData&& data) noexcept
 	{
 		static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
@@ -761,7 +762,7 @@ private:
 	}
 
 	template<typename TDataType, typename TData>
-	static void setTable(lua_State* state, int tableIndex, const std::string& index, TData&& data)
+	static void setTable(lua_State* state, int tableIndex, const std::string& index, TData&& data) noexcept
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 
@@ -774,7 +775,7 @@ private:
 	}
 
 	template<typename TDataType, typename TData>
-	static void setTable(lua_State* state, int tableIndex, const char* index, TData&& data)
+	static void setTable(lua_State* state, int tableIndex, const char* index, TData&& data) noexcept
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		
@@ -787,7 +788,7 @@ private:
 	}
 
 	template<typename TDataType, typename TData>
-	static void setTable(lua_State* state, int index, Metatable_t, TData&& data)
+	static void setTable(lua_State* state, int index, Metatable_t, TData&& data) noexcept
 	{
 		static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 		
@@ -800,7 +801,7 @@ private:
 	}
 
 	template<typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
-	static auto setTable(lua_State* state, int index, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices)
+	static auto setTable(lua_State* state, int index, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) noexcept
 		-> typename std::enable_if<!std::is_same<typename std::decay<TIndex1>::type, Metatable_t>::value>::type
 	{
 		static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
@@ -814,7 +815,7 @@ private:
 	}
 
 	template<typename TDataType, typename TIndex2, typename... TIndices>
-	static void setTable(lua_State* state, int tableIndex, Metatable_t, TIndex2&& index2, TIndices&&... indices)
+	static void setTable(lua_State* state, int tableIndex, Metatable_t, TIndex2&& index2, TIndices&&... indices) noexcept
 	{
 		if (lua_getmetatable(state, tableIndex) == 0)
 		{
@@ -834,7 +835,7 @@ private:
 	}
 
 	template<typename TDataType, typename... TIndices>
-	static void setTable(lua_State* state, int index, const ThreadID& thread, TIndices&&... indices)
+	static void setTable(lua_State* state, int index, const ThreadID& thread, TIndices&&... indices) noexcept
 	{
 		setTable<TDataType>(thread.state, -1, std::forward<TIndices>(indices)...);
 	}
@@ -1237,7 +1238,7 @@ private:
 		static const int maxSize = 1;
 
 		template<typename TType2>
-		static PushedObject push(lua_State* state, TType2&& value) {
+		static PushedObject push(lua_State* state, TType2&& value) noexcept {
 			// this function is called when lua's garbage collector wants to destroy our object
 			// we simply call its destructor
 			const auto garbageCallbackFunction = [](lua_State* lua) -> int {
@@ -1690,7 +1691,7 @@ struct LuaContext::Pusher<bool> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, bool value) {
+	static PushedObject push(lua_State* state, bool value) noexcept {
 		lua_pushboolean(state, value);
 		return PushedObject{state, 1};
 	}
@@ -1702,7 +1703,7 @@ struct LuaContext::Pusher<std::string> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::string& value) {
+	static PushedObject push(lua_State* state, const std::string& value) noexcept {
 		lua_pushstring(state, value.c_str());
 		return PushedObject{state, 1};
 	}
@@ -1714,7 +1715,7 @@ struct LuaContext::Pusher<const char*> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const char* value) {
+	static PushedObject push(lua_State* state, const char* value) noexcept {
 		lua_pushstring(state, value);
 		return PushedObject{state, 1};
 	}
@@ -1726,7 +1727,7 @@ struct LuaContext::Pusher<const char[N]> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const char* value) {
+	static PushedObject push(lua_State* state, const char* value) noexcept {
 		lua_pushstring(state, value);
 		return PushedObject{state, 1};
 	}
@@ -1738,7 +1739,7 @@ struct LuaContext::Pusher<T, typename std::enable_if<std::is_floating_point<T>::
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, T value) {
+	static PushedObject push(lua_State* state, T value) noexcept {
 		lua_pushnumber(state, value);
 		return PushedObject{state, 1};
 	}
@@ -1750,7 +1751,7 @@ struct LuaContext::Pusher<T, typename std::enable_if<std::is_integral<T>::value>
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, T value) {
+	static PushedObject push(lua_State* state, T value) noexcept {
 		lua_pushinteger(state, value);
 		return PushedObject{state, 1};
 	}
@@ -1762,7 +1763,7 @@ struct LuaContext::Pusher<std::nullptr_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, std::nullptr_t value) {
+	static PushedObject push(lua_State* state, std::nullptr_t value) noexcept {
 		assert(value == nullptr);
 		lua_pushnil(state);
 		return PushedObject{state, 1};
@@ -1775,7 +1776,7 @@ struct LuaContext::Pusher<LuaContext::EmptyArray_t> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, EmptyArray_t) {
+	static PushedObject push(lua_State* state, EmptyArray_t) noexcept {
 		lua_newtable(state);
 		return PushedObject{state, 1};
 	}
@@ -1787,7 +1788,7 @@ struct LuaContext::Pusher<const std::type_info*> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::type_info* ptr) {
+	static PushedObject push(lua_State* state, const std::type_info* ptr) noexcept {
 		lua_pushlightuserdata(state, const_cast<std::type_info*>(ptr));
 		return PushedObject{state, 1};
 	}
@@ -1799,7 +1800,7 @@ struct LuaContext::Pusher<LuaContext::ThreadID> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const LuaContext::ThreadID& value) {
+	static PushedObject push(lua_State* state, const LuaContext::ThreadID& value) noexcept {
 		lua_pushthread(value.state);
 		return PushedObject{state, 1};
 	}
@@ -1811,7 +1812,7 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::map<TKey,TValue>& value) {
+	static PushedObject push(lua_State* state, const std::map<TKey,TValue>& value) noexcept {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
@@ -1830,7 +1831,7 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::unordered_map<TKey,TValue>& value) {
+	static PushedObject push(lua_State* state, const std::unordered_map<TKey,TValue>& value) noexcept {
 		static_assert(Pusher<typename std::decay<TKey>::type>::minSize == 1 && Pusher<typename std::decay<TKey>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TValue>::type>::minSize == 1 && Pusher<typename std::decay<TValue>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
@@ -1849,7 +1850,7 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::vector<std::pair<TType1,TType2>>& value) {
+	static PushedObject push(lua_State* state, const std::vector<std::pair<TType1,TType2>>& value) noexcept {
 		static_assert(Pusher<typename std::decay<TType1>::type>::minSize == 1 && Pusher<typename std::decay<TType1>::type>::maxSize == 1, "Can't push multiple elements for a table key");
 		static_assert(Pusher<typename std::decay<TType2>::type>::minSize == 1 && Pusher<typename std::decay<TType2>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 
@@ -1868,7 +1869,7 @@ struct LuaContext::Pusher<std::vector<TType>> {
 	static const int minSize = 1;
 	static const int maxSize = 1;
 
-	static PushedObject push(lua_State* state, const std::vector<TType>& value) {
+	static PushedObject push(lua_State* state, const std::vector<TType>& value) noexcept {
 		static_assert(Pusher<typename std::decay<TType>::type>::minSize == 1 && Pusher<typename std::decay<TType>::type>::maxSize == 1, "Can't push multiple elements for a table value");
 		
 		auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
@@ -1886,7 +1887,7 @@ struct LuaContext::Pusher<std::unique_ptr<TType>> {
 	static const int minSize = Pusher<std::shared_ptr<TType>>::minSize;
 	static const int maxSize = Pusher<std::shared_ptr<TType>>::maxSize;
 
-	static PushedObject push(lua_State* state, std::unique_ptr<TType> value) {
+	static PushedObject push(lua_State* state, std::unique_ptr<TType> value) noexcept {
 		return Pusher<std::shared_ptr<TType>>::push(state, std::move(value));
 	}
 };
@@ -1906,7 +1907,7 @@ struct LuaContext::Pusher<TEnum, typename std::enable_if<std::is_enum<TEnum>::va
 	static const int minSize = Pusher<RealType>::minSize;
 	static const int maxSize = Pusher<RealType>::maxSize;
 
-	static PushedObject push(lua_State* state, TEnum value) {
+	static PushedObject push(lua_State* state, TEnum value) noexcept {
 		return Pusher<RealType>::push(state, static_cast<RealType>(value));
 	}
 };
@@ -1925,7 +1926,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 
 	// this is the version of "push" for non-trivially destructible function objects
 	template<typename TFunctionObject>
-	static auto push(lua_State* state, TFunctionObject fn)
+	static auto push(lua_State* state, TFunctionObject fn) noexcept
 		-> typename std::enable_if<!boost::has_trivial_destructor<TFunctionObject>::value, PushedObject>::type
 	{
 		// TODO: is_move_constructible not supported by some compilers
@@ -1984,7 +1985,7 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
 
 	// this is the version of "push" for trivially destructible objects
 	template<typename TFunctionObject>
-	static auto push(lua_State* state, TFunctionObject fn)
+	static auto push(lua_State* state, TFunctionObject fn) noexcept
 		-> typename std::enable_if<boost::has_trivial_destructor<TFunctionObject>::value, PushedObject>::type
 	{
 		// TODO: is_move_constructible not supported by some compilers
@@ -2091,7 +2092,7 @@ struct LuaContext::Pusher<TReturnType (*)(TParameters...)>
 	static const int maxSize = SubPusher::maxSize;
 
 	template<typename TType>
-	static PushedObject push(lua_State* state, TType value) {
+	static PushedObject push(lua_State* state, TType value) noexcept {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2107,7 +2108,7 @@ struct LuaContext::Pusher<TReturnType (&)(TParameters...)>
 	static const int maxSize = SubPusher::maxSize;
 
 	template<typename TType>
-	static PushedObject push(lua_State* state, TType value) {
+	static PushedObject push(lua_State* state, TType value) noexcept {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2122,7 +2123,7 @@ struct LuaContext::Pusher<std::function<TReturnType (TParameters...)>>
 	static const int minSize = SubPusher::minSize;
 	static const int maxSize = SubPusher::maxSize;
 
-	static PushedObject push(lua_State* state, const std::function<TReturnType (TParameters...)>& value) {
+	static PushedObject push(lua_State* state, const std::function<TReturnType (TParameters...)>& value) noexcept {
 		return SubPusher::push(state, value);
 	}
 };
@@ -2134,7 +2135,7 @@ struct LuaContext::Pusher<boost::variant<TTypes...>>
 	static const int minSize = PusherMinSize<TTypes...>::size;
 	static const int maxSize = PusherMaxSize<TTypes...>::size;
 
-	static PushedObject push(lua_State* state, const boost::variant<TTypes...>& value) {
+	static PushedObject push(lua_State* state, const boost::variant<TTypes...>& value) noexcept {
 		PushedObject obj{state, 0};
 		VariantWriter writer{state, obj};
 		value.apply_visitor(writer);
@@ -2144,7 +2145,7 @@ struct LuaContext::Pusher<boost::variant<TTypes...>>
 private:
 	struct VariantWriter : public boost::static_visitor<> {
 		template<typename TType>
-		void operator()(TType value)
+		void operator()(TType value) noexcept
 		{
 			obj = Pusher<typename std::decay<TType>::type>::push(state, std::move(value));
 		}
@@ -2164,7 +2165,7 @@ struct LuaContext::Pusher<boost::optional<TType>> {
 	static const int minSize = UnderlyingPusher::minSize < 1 ? UnderlyingPusher::minSize : 1;
 	static const int maxSize = UnderlyingPusher::maxSize > 1 ? UnderlyingPusher::maxSize : 1;
 
-	static PushedObject push(lua_State* state, const boost::optional<TType>& value) {
+	static PushedObject push(lua_State* state, const boost::optional<TType>& value) noexcept {
 		if (value) {
 			return UnderlyingPusher::push(state, value.get());
 		} else {
@@ -2181,17 +2182,17 @@ struct LuaContext::Pusher<std::tuple<TTypes...>> {
 	static const int minSize = PusherTotalMinSize<TTypes...>::size;
 	static const int maxSize = PusherTotalMaxSize<TTypes...>::size;
 
-	static PushedObject push(lua_State* state, const std::tuple<TTypes...>& value) {
+	static PushedObject push(lua_State* state, const std::tuple<TTypes...>& value) noexcept {
 		return PushedObject{state, push2(state, value, std::integral_constant<int,0>{})};
 	}
 
-	static PushedObject push(lua_State* state, std::tuple<TTypes...>&& value) {
+	static PushedObject push(lua_State* state, std::tuple<TTypes...>&& value) noexcept {
 		return PushedObject{state, push2(state, std::move(value), std::integral_constant<int,0>{})};
 	}
 
 private:
 	template<int N>
-	static int push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) {
+	static int push2(lua_State* state, const std::tuple<TTypes...>& value, std::integral_constant<int,N>) noexcept {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
 
 		return Pusher<typename std::decay<ElemType>::type>::push(state, std::get<N>(value)).release() +
@@ -2199,18 +2200,18 @@ private:
 	}
 
 	template<int N>
-	static int push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) {
+	static int push2(lua_State* state, std::tuple<TTypes...>&& value, std::integral_constant<int,N>) noexcept {
 		typedef typename std::tuple_element<N,std::tuple<TTypes...>>::type ElemType;
 
 		return Pusher<typename std::decay<ElemType>::type>::push(state, std::move(std::get<N>(value))).release() +
 			push2(state, std::move(value), std::integral_constant<int,N+1>{});
 	}
 	
-	static int push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) {
+	static int push2(lua_State* state, const std::tuple<TTypes...>&, std::integral_constant<int,sizeof...(TTypes)>) noexcept {
 		return 0;
 	}
 	
-	static int push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) {
+	static int push2(lua_State* state, std::tuple<TTypes...>&&, std::integral_constant<int,sizeof...(TTypes)>) noexcept {
 		return 0;
 	}
 };
