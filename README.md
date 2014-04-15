@@ -525,31 +525,26 @@ And this helper function:
     pushl   %edi
     pushl   %esi
     pushl   %ebx
-    subl    $44, %esp
+    subl    $60, %esp
     movl    8(%ebp), %ebx
     movl    $-1001001, 4(%esp)
     movl    %ebx, (%esp)
     call    lua_touserdata
     movl    %ebx, (%esp)
-    movl    %eax, %esi
     call    lua_gettop
     testl   %eax, %eax
-    jle .L488               # handling not enough parameters
+    jle .L458               # handling not enough parameters
     cmpl    $1, %eax
-    jne .L489               # handling too many parameters
-    movl    $-1, 4(%esp)
-    movl    %ebx, (%esp)
-    call    lua_isnumber
-    testl   %eax, %eax
-    jne .L465
-    ...                     # skipped code for wrong parameter type
-    .L465:
-    movl    $0, 8(%esp)
+    jne .L459               # handling too many parameters
+    leal    -36(%ebp), %esi
+    movl    %esi, 8(%esp)
     movl    $-1, 4(%esp)
     movl    %ebx, (%esp)
     call    lua_tointegerx
-    movl    %eax, (%esp)
-    call    *%esi            # calls the lambda
+    movl    -36(%ebp), %ecx
+    testl   %ecx, %ecx
+    je  .L436               # handling wrong parameter type
+    addl    $1, %eax
     movl    %eax, 4(%esp)
     movl    %ebx, (%esp)
     call    lua_pushinteger
