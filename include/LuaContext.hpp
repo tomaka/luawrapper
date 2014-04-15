@@ -71,6 +71,7 @@ class LuaContext {
     struct ValueInRegistry;
     template<typename TFunctionObject, typename TFirstParamType> struct Binder;
     template<typename T> struct IsOptional;
+    enum Globals_t { Globals }; // tag for "global variables"
 public:
     /**
      * @param openDefaultLibs True if luaL_openlibs should be called
@@ -630,14 +631,8 @@ public:
         typedef typename std::decay<typename std::tuple_element<sizeof...(TData) - 1,std::tuple<TData...>>::type>::type
             RealDataType;
         static_assert(!std::is_same<typename Tupleizer<RealDataType>::type,RealDataType>::value, "Error: you can't use LuaContext::writeVariable with a tuple");
-
-#       if LUA_VERSION_NUM >= 502
-            lua_pushglobaltable(mState);
-            PushedObject obj{mState, 1};
-            setTable<RealDataType>(mState, -1, std::forward<TData>(data)...);
-#       else
-            setTable<RealDataType>(mState, LUA_GLOBALSINDEX, std::forward<TData>(data)...);
-#       endif
+        
+        setTable<RealDataType>(mState, Globals, std::forward<TData>(data)...);
     }
     
     /**
@@ -648,13 +643,7 @@ public:
     void writeFunction(TData&&... data) noexcept {
         static_assert(sizeof...(TData) >= 2, "You must pass at least a variable name and a value to writeFunction");
         
-#       if LUA_VERSION_NUM >= 502
-            lua_pushglobaltable(mState);
-            PushedObject obj{mState, 1};
-            setTable<TFunctionType>(mState, -1, std::forward<TData>(data)...);
-#       else
-            setTable<TFunctionType>(mState, LUA_GLOBALSINDEX, std::forward<TData>(data)...);
-#       endif
+        setTable<TFunctionType>(mState, Globals, std::forward<TData>(data)...);
     }
 
     /**
@@ -716,6 +705,9 @@ private:
     template<typename T>
     struct tag {};
 
+    // tag for "the registry"
+    enum RegistryTag { Registry };
+    
     // this function takes a value representing the offset to look into
     // it will look into the top element of the stack and replace the element by its content at the given index
     template<typename OffsetType1, typename... OffsetTypeOthers>
@@ -745,100 +737,242 @@ private:
     // the dataPusher MUST push only one thing on the stack
     // TTableIndex must be either LUA_REGISTERYINDEX, LUA_GLOBALSINDEX, LUA_ENVINDEX, or the position of the element on the stack
     template<typename TDataType, typename TIndex, typename TData>
-    static void setTable(lua_State* state, int tableIndex, TIndex&& index, TData&& data) noexcept
+    static void setTable(lua_State* state, const PushedObject&, TIndex&& index, TData&& data) noexcept
     {
         static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
         static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
         
-        const auto tableNewIndex = (tableIndex < -100 || tableIndex > 0) ? tableIndex : tableIndex - 2;
-
         auto p1 = Pusher<typename std::decay<TIndex>::type>::push(state, index);
         auto p2 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
 
-        assert(lua_istable(state, tableNewIndex));
-        lua_settable(state, tableNewIndex);
+        lua_settable(state, -3);
         p1.release();
         p2.release();
     }
 
     template<typename TDataType, typename TData>
-    static void setTable(lua_State* state, int tableIndex, const std::string& index, TData&& data) noexcept
+    static void setTable(lua_State* state, const PushedObject&, const std::string& index, TData&& data) noexcept
     {
         static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
 
-        const auto tableNewIndex = (tableIndex < -100 || tableIndex > 0) ? tableIndex : tableIndex - 1;
-
         auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
-        assert(lua_istable(state, tableNewIndex));
-        lua_setfield(state, tableNewIndex, index.c_str());
+        lua_setfield(state, -2, index.c_str());
         p1.release();
     }
 
     template<typename TDataType, typename TData>
-    static void setTable(lua_State* state, int tableIndex, const char* index, TData&& data) noexcept
+    static void setTable(lua_State* state, const PushedObject&, const char* index, TData&& data) noexcept
     {
         static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
         
-        const auto tableNewIndex = (tableIndex < -100 || tableIndex > 0) ? tableIndex : tableIndex - 1;
-
         auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
-        assert(lua_istable(state, tableNewIndex));
-        lua_setfield(state, tableNewIndex, index);
+        lua_setfield(state, -2, index);
         p1.release();
     }
 
     template<typename TDataType, typename TData>
-    static void setTable(lua_State* state, int index, Metatable_t, TData&& data) noexcept
+    static void setTable(lua_State* state, const PushedObject&, Metatable_t, TData&& data) noexcept
     {
         static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
         
-        const auto tableIndex = (index < -100 || index > 0) ? index : index - 1;
-
         auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
-        assert(lua_istable(state, tableIndex));
-        lua_setmetatable(state, tableIndex);
+        lua_setmetatable(state, -2);
         p1.release();
     }
 
-    template<typename TDataType, typename TIndex1, typename TIndex2, typename... TIndices>
-    static auto setTable(lua_State* state, int index, TIndex1&& index1, TIndex2&& index2, TIndices&&... indices) noexcept
+    template<typename TDataType, typename TIndex1, typename TIndex2, typename TIndex3, typename... TIndices>
+    static auto setTable(lua_State* state, PushedObject&, TIndex1&& index1, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
         -> typename std::enable_if<!std::is_same<typename std::decay<TIndex1>::type, Metatable_t>::value>::type
     {
         static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
         
-        const auto tableIndex = (index < -100 || index > 0) ? index : index - 1;
-
         auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1));
-        lua_gettable(state, tableIndex);
+        lua_gettable(state, -2);
 
-        setTable<TDataType>(state, -1, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
     }
 
-    template<typename TDataType, typename TIndex2, typename... TIndices>
-    static void setTable(lua_State* state, int tableIndex, Metatable_t, TIndex2&& index2, TIndices&&... indices) noexcept
+    template<typename TDataType, typename TIndex1, typename TIndex2, typename TIndex3, typename... TIndices>
+    static auto setTable(lua_State* state, PushedObject&& pushedTable, TIndex1&& index1, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+        -> typename std::enable_if<!std::is_same<typename std::decay<TIndex1>::type, Metatable_t>::value>::type
     {
-        if (lua_getmetatable(state, tableIndex) == 0)
+        static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+        
+        auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1)) + std::move(pushedTable);
+        lua_gettable(state, -2);
+
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+    }
+
+    template<typename TDataType, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, PushedObject& pushedObject, Metatable_t, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+    {
+        if (lua_getmetatable(state, -1) == 0)
         {
             lua_newtable(state);
             PushedObject p1{state, 1};
-            const auto tableNewIndex = (tableIndex < -100 || tableIndex > 0) ? tableIndex : tableIndex - 1;
 
-            setTable<TDataType>(state, -1, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+            setTable<TDataType>(state, p1, std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
 
-            lua_setmetatable(state, tableNewIndex);
+            lua_setmetatable(state, -2);
             p1.release();
         }
         else
         {
-            setTable<TDataType>(state, -1, std::forward<TIndex2>(index2), std::forward<TIndices>(indices)...);
+            setTable<TDataType>(state, pushedObject, std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
         }
     }
 
-    template<typename TDataType, typename... TIndices>
-    static void setTable(lua_State* state, int index, const ThreadID& thread, TIndices&&... indices) noexcept
+    template<typename TDataType, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, PushedObject&& pushedObject, Metatable_t, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
     {
-        setTable<TDataType>(thread.state, -1, std::forward<TIndices>(indices)...);
+        if (lua_getmetatable(state, -1) == 0)
+        {
+            lua_newtable(state);
+            PushedObject p1{state, 1};
+
+            setTable<TDataType>(state, p1, std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+
+            lua_setmetatable(state, -2);
+            p1.release();
+        }
+        else
+        {
+            setTable<TDataType>(state, std::move(pushedObject), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+        }
     }
+
+    template<typename TDataType, typename TIndex, typename TData>
+    static void setTable(lua_State* state, RegistryTag, TIndex&& index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+        
+        auto p1 = Pusher<typename std::decay<TIndex>::type>::push(state, index);
+        auto p2 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+
+        lua_settable(state, LUA_REGISTRYINDEX);
+        p1.release();
+        p2.release();
+    }
+
+    template<typename TDataType, typename TData>
+    static void setTable(lua_State* state, RegistryTag, const std::string& index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+
+        auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+        lua_setfield(state, LUA_REGISTRYINDEX, index.c_str());
+        p1.release();
+    }
+
+    template<typename TDataType, typename TData>
+    static void setTable(lua_State* state, RegistryTag, const char* index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+
+        auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+        lua_setfield(state, LUA_REGISTRYINDEX, index);
+        p1.release();
+    }
+
+    template<typename TDataType, typename TIndex1, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, RegistryTag, TIndex1&& index1, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+        
+        auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1));
+        lua_gettable(state, LUA_REGISTRYINDEX);
+
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+    }
+
+    template<typename TDataType, typename TIndex, typename TData>
+    static void setTable(lua_State* state, Globals_t, TIndex&& index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TIndex>::type>::minSize == 1 && Pusher<typename std::decay<TIndex>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+        
+        
+#       if LUA_VERSION_NUM >= 502
+
+            lua_pushglobaltable(state);
+            PushedObject p3{state, 1};
+            auto p1 = Pusher<typename std::decay<TIndex>::type>::push(state, index);
+            auto p2 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+            lua_settable(state, -3);
+
+#       else
+            
+            auto p1 = Pusher<typename std::decay<TIndex>::type>::push(state, index);
+            auto p2 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+            lua_settable(state, LUA_GLOBALSINDEX);
+
+#       endif
+
+        p1.release();
+        p2.release();
+    }
+
+    template<typename TDataType, typename TData>
+    static void setTable(lua_State* state, Globals_t, const std::string& index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+
+        auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+        lua_setglobal(state, index.c_str());
+        p1.release();
+    }
+
+    template<typename TDataType, typename TData>
+    static void setTable(lua_State* state, Globals_t, const char* index, TData&& data) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TDataType>::type>::minSize == 1 && Pusher<typename std::decay<TDataType>::type>::maxSize == 1, "Impossible to have a multiple-values data");
+
+        auto p1 = Pusher<typename std::decay<TDataType>::type>::push(state, std::forward<TData>(data));
+        lua_setglobal(state, index);
+        p1.release();
+    }
+
+    template<typename TDataType, typename TIndex1, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, Globals_t, TIndex1&& index1, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+    {
+        static_assert(Pusher<typename std::decay<TIndex1>::type>::minSize == 1 && Pusher<typename std::decay<TIndex1>::type>::maxSize == 1, "Impossible to have a multiple-values index");
+        
+#       if LUA_VERSION_NUM >= 502
+
+            lua_pushglobaltable(state);
+            auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1)) + PushedObject{state, 1};
+            lua_gettable(state, -2);
+
+#       else
+
+            auto p1 = Pusher<typename std::decay<TIndex1>::type>::push(state, std::forward<TIndex1>(index1));
+            lua_gettable(state, LUA_GLOBALSINDEX);
+
+#       endif
+
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+    }
+
+    // TODO: g++ reports "ambiguous overload"
+    /*template<typename TDataType, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, Globals_t, const char* index, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+    {
+        lua_getglobal(state, index);
+        PushedObject p1{state, 1};
+
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+    }
+
+    template<typename TDataType, typename TIndex2, typename TIndex3, typename... TIndices>
+    static void setTable(lua_State* state, Globals_t, const std::string& index, TIndex2&& index2, TIndex3&& index3, TIndices&&... indices) noexcept
+    {
+        lua_getglobal(state, index.c_str());
+        PushedObject p1{state, 1};
+
+        setTable<TDataType>(state, std::move(p1), std::forward<TIndex2>(index2), std::forward<TIndex3>(index3), std::forward<TIndices>(indices)...);
+    }*/
 
     // simple function that reads the "nb" first top elements of the stack, pops them, and returns the value
     // warning: first parameter is the number of parameters, not the parameter index
@@ -910,13 +1044,13 @@ private:
         static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerFunction can only be used for a class or a pointer");
 
         checkTypeRegistration(mState, &typeid(TObject));
-        setTable<TRetValue(TObject&, TOtherParams...)>(mState, LUA_REGISTRYINDEX, &typeid(TObject), 0, functionName, std::move(function));
+        setTable<TRetValue(TObject&, TOtherParams...)>(mState, Registry, &typeid(TObject), 0, functionName, std::move(function));
         
         checkTypeRegistration(mState, &typeid(TObject*));
-        setTable<TRetValue(TObject*, TOtherParams...)>(mState,LUA_REGISTRYINDEX,  &typeid(TObject*), 0, functionName, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+        setTable<TRetValue(TObject*, TOtherParams...)>(mState, Registry, &typeid(TObject*), 0, functionName, [=](TObject* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject>));
-        setTable<TRetValue(std::shared_ptr<TObject>, TOtherParams...)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject>), 0, functionName, [=](const std::shared_ptr<TObject>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+        setTable<TRetValue(std::shared_ptr<TObject>, TOtherParams...)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 0, functionName, [=](const std::shared_ptr<TObject>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
     }
     
     template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
@@ -925,10 +1059,10 @@ private:
         registerFunctionImpl(functionName, function, tag<TObject>{}, fTypeTag);
 
         checkTypeRegistration(mState, &typeid(TObject const*));
-        setTable<TRetValue(TObject const*, TOtherParams...)>(mState, LUA_REGISTRYINDEX, &typeid(TObject const*), 0, functionName, [=](TObject const* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+        setTable<TRetValue(TObject const*, TOtherParams...)>(mState, Registry, &typeid(TObject const*), 0, functionName, [=](TObject const* obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject const>));
-        setTable<TRetValue(std::shared_ptr<TObject const>, TOtherParams...)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject const>), 0, functionName, [=](const std::shared_ptr<TObject const>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
+        setTable<TRetValue(std::shared_ptr<TObject const>, TOtherParams...)>(mState, Registry, &typeid(std::shared_ptr<TObject const>), 0, functionName, [=](const std::shared_ptr<TObject const>& obj, TOtherParams... rest) { assert(obj); return function(*obj, std::forward<TOtherParams>(rest)...); });
     }
 
     template<typename TFunctionType, typename TRetValue, typename TObject, typename... TOtherParams>
@@ -962,30 +1096,30 @@ private:
         static_assert(std::is_class<TObject>::value || std::is_pointer<TObject>::value, "registerMember can only be called on a class or a pointer");
         
         checkTypeRegistration(mState, &typeid(TObject));
-        setTable<TVarType (TObject&)>(mState, LUA_REGISTRYINDEX, &typeid(TObject), 1, name, [readFunction](TObject const& object) {
+        setTable<TVarType (TObject&)>(mState, Registry, &typeid(TObject), 1, name, [readFunction](TObject const& object) {
             return readFunction(object);
         });
         
         checkTypeRegistration(mState, &typeid(TObject*));
-        setTable<TVarType (TObject*)>(mState, LUA_REGISTRYINDEX, &typeid(TObject*), 1, name, [readFunction](TObject const* object) {
+        setTable<TVarType (TObject*)>(mState, Registry, &typeid(TObject*), 1, name, [readFunction](TObject const* object) {
             assert(object);
             return readFunction(*object);
         });
         
         checkTypeRegistration(mState, &typeid(TObject const*));
-        setTable<TVarType (TObject const*)>(mState, LUA_REGISTRYINDEX, &typeid(TObject const*), 1, name, [readFunction](TObject const* object) {
+        setTable<TVarType (TObject const*)>(mState, Registry, &typeid(TObject const*), 1, name, [readFunction](TObject const* object) {
             assert(object);
             return readFunction(*object);
         });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject>));
-        setTable<TVarType (std::shared_ptr<TObject>)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject>), 1, name, [readFunction](const std::shared_ptr<TObject>& object) {
+        setTable<TVarType (std::shared_ptr<TObject>)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 1, name, [readFunction](const std::shared_ptr<TObject>& object) {
             assert(object);
             return readFunction(*object);
         });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject const>));
-        setTable<TVarType (std::shared_ptr<TObject const>)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject const>), 1, name, [readFunction](const std::shared_ptr<TObject const>& object) {
+        setTable<TVarType (std::shared_ptr<TObject const>)>(mState, Registry, &typeid(std::shared_ptr<TObject const>), 1, name, [readFunction](const std::shared_ptr<TObject const>& object) {
             assert(object);
             return readFunction(*object);
         });
@@ -996,16 +1130,16 @@ private:
     {
         registerMemberImpl<TObject,TVarType>(name, readFunction);
 
-        setTable<void (TObject&, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(TObject), 4, name, [writeFunction](TObject& object, const TVarType& value) {
+        setTable<void (TObject&, TVarType)>(mState, Registry, &typeid(TObject), 4, name, [writeFunction](TObject& object, const TVarType& value) {
             writeFunction(object, value);
         });
         
-        setTable<void (TObject*, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(TObject*), 4, name, [writeFunction](TObject* object, const TVarType& value) {
+        setTable<void (TObject*, TVarType)>(mState, Registry, &typeid(TObject*), 4, name, [writeFunction](TObject* object, const TVarType& value) {
             assert(object);
             writeFunction(*object, value);
         });
         
-        setTable<void (std::shared_ptr<TObject>, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject>), 4, name, [writeFunction](std::shared_ptr<TObject> object, const TVarType& value) {
+        setTable<void (std::shared_ptr<TObject>, TVarType)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 4, name, [writeFunction](std::shared_ptr<TObject> object, const TVarType& value) {
             assert(object);
             writeFunction(*object, value);
         });
@@ -1028,30 +1162,30 @@ private:
     void registerMemberImpl(TReadFunction readFunction)
     {
         checkTypeRegistration(mState, &typeid(TObject));
-        setTable<TVarType (TObject const&, std::string)>(mState, LUA_REGISTRYINDEX, &typeid(TObject), 2, [readFunction](TObject const& object, const std::string& name) {
+        setTable<TVarType (TObject const&, std::string)>(mState, Registry, &typeid(TObject), 2, [readFunction](TObject const& object, const std::string& name) {
             return readFunction(object, name);
         });
         
         checkTypeRegistration(mState, &typeid(TObject*));
-        setTable<TVarType (TObject*, std::string)>(mState, LUA_REGISTRYINDEX, &typeid(TObject*), 2, [readFunction](TObject const* object, const std::string& name) {
+        setTable<TVarType (TObject*, std::string)>(mState, Registry, &typeid(TObject*), 2, [readFunction](TObject const* object, const std::string& name) {
             assert(object);
             return readFunction(*object, name);
         });
         
         checkTypeRegistration(mState, &typeid(TObject const*));
-        setTable<TVarType (TObject const*, std::string)>(mState, LUA_REGISTRYINDEX, &typeid(TObject const*), 2, [readFunction](TObject const* object, const std::string& name) {
+        setTable<TVarType (TObject const*, std::string)>(mState, Registry, &typeid(TObject const*), 2, [readFunction](TObject const* object, const std::string& name) {
             assert(object);
             return readFunction(*object, name);
         });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject>));
-        setTable<TVarType (std::shared_ptr<TObject>, std::string)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject>), 2, [readFunction](const std::shared_ptr<TObject>& object, const std::string& name) {
+        setTable<TVarType (std::shared_ptr<TObject>, std::string)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 2, [readFunction](const std::shared_ptr<TObject>& object, const std::string& name) {
             assert(object);
             return readFunction(*object, name);
         });
         
         checkTypeRegistration(mState, &typeid(std::shared_ptr<TObject const>));
-        setTable<TVarType (std::shared_ptr<TObject const>, std::string)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject const>), 2, [readFunction](const std::shared_ptr<TObject const>& object, const std::string& name) {
+        setTable<TVarType (std::shared_ptr<TObject const>, std::string)>(mState, Registry, &typeid(std::shared_ptr<TObject const>), 2, [readFunction](const std::shared_ptr<TObject const>& object, const std::string& name) {
             assert(object);
             return readFunction(*object, name);
         });
@@ -1062,16 +1196,16 @@ private:
     {
         registerMemberImpl<TObject,TVarType>(readFunction);
 
-        setTable<void (TObject&, std::string, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(TObject), 5, [writeFunction](TObject& object, const std::string& name, const TVarType& value) {
+        setTable<void (TObject&, std::string, TVarType)>(mState, Registry, &typeid(TObject), 5, [writeFunction](TObject& object, const std::string& name, const TVarType& value) {
             writeFunction(object, name, value);
         });
         
-        setTable<void (TObject*, std::string, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(TObject*), 2, [writeFunction](TObject* object, const std::string& name, const TVarType& value) {
+        setTable<void (TObject*, std::string, TVarType)>(mState, Registry, &typeid(TObject*), 2, [writeFunction](TObject* object, const std::string& name, const TVarType& value) {
             assert(object);
             writeFunction(*object, name, value);
         });
         
-        setTable<void (std::shared_ptr<TObject>, std::string, TVarType)>(mState, LUA_REGISTRYINDEX, &typeid(std::shared_ptr<TObject>), 2, [writeFunction](const std::shared_ptr<TObject>& object, const std::string& name, const TVarType& value) {
+        setTable<void (std::shared_ptr<TObject>, std::string, TVarType)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 2, [writeFunction](const std::shared_ptr<TObject>& object, const std::string& name, const TVarType& value) {
             assert(object);
             writeFunction(*object, name, value);
         });
@@ -1819,7 +1953,7 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
         auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
-            setTable<TValue>(state, -1, i->first, i->second);
+            setTable<TValue>(state, obj, i->first, i->second);
         
         return std::move(obj);
     }
@@ -1838,7 +1972,7 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
         auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
-            setTable<TValue>(state, -1, i->first, i->second);
+            setTable<TValue>(state, obj, i->first, i->second);
         
         return std::move(obj);
     }
@@ -1857,7 +1991,7 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
         auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
-            setTable<TType2>(state, -1, i->first, i->second);
+            setTable<TType2>(state, obj, i->first, i->second);
         
         return std::move(obj);
     }
@@ -1875,7 +2009,7 @@ struct LuaContext::Pusher<std::vector<TType>> {
         auto obj = Pusher<EmptyArray_t>::push(state, EmptyArray);
 
         for (unsigned int i = 0; i < value.size(); ++i)
-            setTable<TType>(state, -1, i + 1, value[i]);
+            setTable<TType>(state, obj, i + 1, value[i]);
         
         return std::move(obj);
     }
