@@ -520,46 +520,46 @@ Will generate this in the main function:
 
 And this helper function:
 
-        pushl   %ebp
-        movl    %esp, %ebp
-        pushl   %edi
-        pushl   %esi
-        pushl   %ebx
-        subl    $44, %esp
-        movl    8(%ebp), %ebx
-        movl    $-1001001, 4(%esp)
-        movl    %ebx, (%esp)
-        call    lua_touserdata
-        movl    %ebx, (%esp)
-        movl    %eax, %esi
-        call    lua_gettop
-        testl   %eax, %eax
-        jle .L488               # handling not enough parameters
-        cmpl    $1, %eax
-        jne .L489               # handling too many parameters
-        movl    $-1, 4(%esp)
-        movl    %ebx, (%esp)
-        call    lua_isnumber
-        testl   %eax, %eax
-        jne .L465
-        ...                     # skipped code for wrong parameter type
+    pushl   %ebp
+    movl    %esp, %ebp
+    pushl   %edi
+    pushl   %esi
+    pushl   %ebx
+    subl    $44, %esp
+    movl    8(%ebp), %ebx
+    movl    $-1001001, 4(%esp)
+    movl    %ebx, (%esp)
+    call    lua_touserdata
+    movl    %ebx, (%esp)
+    movl    %eax, %esi
+    call    lua_gettop
+    testl   %eax, %eax
+    jle .L488               # handling not enough parameters
+    cmpl    $1, %eax
+    jne .L489               # handling too many parameters
+    movl    $-1, 4(%esp)
+    movl    %ebx, (%esp)
+    call    lua_isnumber
+    testl   %eax, %eax
+    jne .L465
+    ...                     # skipped code for wrong parameter type
     .L465:
-        movl    $0, 8(%esp)
-        movl    $-1, 4(%esp)
-        movl    %ebx, (%esp)
-        call    lua_tointegerx
-        movl    %eax, (%esp)
-        call    *%esi            # calls foo()
-        movl    %eax, 4(%esp)
-        movl    %ebx, (%esp)
-        call    lua_pushinteger
-        leal    -12(%ebp), %esp
-        movl    $1, %eax
-        popl    %ebx
-        popl    %esi
-        popl    %edi
-        popl    %ebp
-        ret
+    movl    $0, 8(%esp)
+    movl    $-1, 4(%esp)
+    movl    %ebx, (%esp)
+    call    lua_tointegerx
+    movl    %eax, (%esp)
+    call    *%esi            # calls the lambda
+    movl    %eax, 4(%esp)
+    movl    %ebx, (%esp)
+    call    lua_pushinteger
+    leal    -12(%ebp), %esp
+    movl    $1, %eax
+    popl    %ebx
+    popl    %esi
+    popl    %edi
+    popl    %ebp
+    ret
 
 (generated with `g++-4.8 -O3 -NDEBUG -std=c++11`)
 
