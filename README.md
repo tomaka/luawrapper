@@ -566,7 +566,9 @@ This code uses new functionalities from [C++11](http://en.wikipedia.org/wiki/C%2
 
 Does it compile on:
   * Visual C++ 2012 or below: no
-  * Visual C++ 2013: yes
+  * Visual C++ 2013: no
+  * Visual C++ 2013 with november CTP: yes
   * gcc 4.7.2: doesn't always compile because of known bug in the compiler
   * gcc 4.8.1: yes
-  * clang 3.2: yes
+  * clang 3.2: doesn't always compile because of known bug in the compiler
+  * clang 3.5: yes
