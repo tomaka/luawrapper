@@ -2416,10 +2416,7 @@ struct LuaContext::Reader<
     {
         if (!lua_isnumber(state, index))
             return boost::none;
-        const auto nb = lua_tonumber(state, index);
-        if (fmod(nb, 1.f) != 0)
-            return boost::none;
-        return static_cast<TType>(nb);
+        return static_cast<TType>(lua_tointeger(state, index));
     }
 };
 
