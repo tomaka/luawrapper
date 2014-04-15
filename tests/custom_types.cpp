@@ -307,5 +307,5 @@ TEST(CustomTypes, CopiesCheckReturnByValue) {
 	
 	context.executeCode("obj = build()");
     EXPECT_EQ(0, copiesCount);
-    EXPECT_GE(movesCount, 1);		// TODO: should be == instead of >=
+    EXPECT_EQ(movesCount, 1);
 }

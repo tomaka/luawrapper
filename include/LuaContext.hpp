@@ -69,6 +69,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 class LuaContext {
 	struct ValueInRegistry;
+	template<typename TFunctionObject, typename TFirstParamType> struct Binder;
+	template<typename T> struct IsOptional;
 public:
 	/**
 	 * @param openDefaultLibs True if luaL_openlibs should be called
@@ -1406,44 +1408,6 @@ private:
 
 	
 	/**************************************************/
-	/*            CALL FUNCTION WITH TUPLE            */
-	/**************************************************/
-	// this is a bit of template meta-programming hack
-	// the only interesting element here is "callWithTuple" which calls a function using parameters passed as a tuple
-	// note that it either returns std::tuple<TrueReturnType> or std::tuple<> instead of void
-	template<int...>
-	struct Sequence {};
-	template<typename Sequence>
-	struct IncrementSequence {};
-	template<int N>
-	struct GenerateSequence { typedef typename IncrementSequence<typename GenerateSequence<N - 1>::type>::type type; };
-
-	template<typename TRetValue, typename TFunctionObject, typename TTuple, int... S>
-	static auto callWithTupleImpl(TFunctionObject&& function, const TTuple& parameters, Sequence<S...>)
-		-> TRetValue
-	{
-		return function(std::get<S>(parameters)...);
-	}
-
-	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	static auto callWithTuple(TFunctionObject&& function, const TTuple& parameters)
-		-> typename std::enable_if<!std::is_void<TRetValue>::value, std::tuple<TRetValue>>::type
-	{
-		// implementation with a return type
-		return std::tuple<TRetValue>(callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type()));
-	}
-
-	template<typename TRetValue, typename TFunctionObject, typename TTuple>
-	static auto callWithTuple(TFunctionObject&& function, const TTuple& parameters)
-		-> typename std::enable_if<std::is_void<TRetValue>::value, std::tuple<>>::type
-	{
-		// implementation without a return type
-		callWithTupleImpl<TRetValue>(std::forward<TFunctionObject>(function), parameters, typename GenerateSequence<std::tuple_size<TTuple>::value>::type());
-		return std::tuple<>();
-	}
-
-	
-	/**************************************************/
 	/*                READ FUNCTIONS                  */
 	/**************************************************/
 	// the "Reader" structures allow to read data from the stack
@@ -1489,6 +1453,49 @@ private:
 			return true;
 		}
 	};
+	
+	/**
+	 * This functions reads multiple values starting at "index" and passes them to the callback
+	 */
+	template<typename TRetValue, typename TCallback>
+	static auto readIntoFunction(lua_State* state, tag<TRetValue>, TCallback&& callback, int index)
+		-> TRetValue
+	{
+		return callback();
+	}
+	template<typename TRetValue, typename TCallback, typename TFirstType, typename... TTypes>
+	static auto readIntoFunction(lua_State* state, tag<TRetValue> retValueTag, TCallback&& callback, int index, tag<TFirstType>, tag<TTypes>... othersTags)
+		-> typename std::enable_if<IsOptional<TFirstType>::value, TRetValue>::type
+	{
+		if (index >= 0) {
+			Binder<TCallback, const TFirstType&> binder{ callback, {} };
+			return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
+		}
+
+		const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
+
+		if (!firstElem) {
+			Binder<TCallback, const TFirstType&> binder{ callback, {} };
+			return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
+
+		} else {
+			Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
+			return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
+		}
+	}
+	template<typename TRetValue, typename TCallback, typename TFirstType, typename... TTypes>
+	static auto readIntoFunction(lua_State* state, tag<TRetValue> retValueTag, TCallback&& callback, int index, tag<TFirstType>, tag<TTypes>... othersTags)
+		-> typename std::enable_if<!IsOptional<TFirstType>::value, TRetValue>::type
+	{
+		if (index >= 0)
+			throw std::logic_error("Wrong number of parameters");
+
+		const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
+		if (!firstElem)
+			throw std::logic_error("Unable to read");
+		Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
+		return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
+	}
 
 
 	/**************************************************/
@@ -1526,7 +1533,21 @@ private:
 	private:
 		lua_State* lua;
 	};
+	
+	// binds the first parameter of a function object
+	template<typename TFunctionObject, typename TFirstParamType>
+	struct Binder {
+		TFunctionObject function;
+		TFirstParamType param;
 
+		template<typename... TParams>
+		auto operator()(TParams&&... params)
+			-> decltype(function(param, std::forward<TParams>(params)...))
+		{
+			return function(param, std::forward<TParams>(params)...);
+		}
+	};
+	
 	// turns a type into a tuple
 	// void is turned into std::tuple<>
 	// existing tuples are untouched
@@ -1566,12 +1587,6 @@ inline auto LuaContext::readTopAndPop<void>(lua_State* state, PushedObject obj)
 	-> void
 {
 }
-
-// 
-template<int... S>
-struct LuaContext::IncrementSequence<LuaContext::Sequence<S...>> { typedef Sequence<S..., sizeof...(S)> type; };
-template<>
-struct LuaContext::GenerateSequence<0> { typedef Sequence<> type; };
 
 // this structure takes a template parameter T
 // if T is a tuple, it returns T ; if T is not a tuple, it returns std::tuple<T>
@@ -2002,7 +2017,9 @@ private:
 	// callback that calls the function object
 	// this function is used by the callbacks and handles loading arguments from the stack and pushing the return value back
 	template<typename TFunctionObject>
-	static PushedObject callback(lua_State* state, TFunctionObject* toCall, int argumentsCount) {
+	static auto callback(lua_State* state, TFunctionObject* toCall, int argumentsCount)
+		-> PushedObject
+	{
 		// checking if number of parameters is correct
 		if (argumentsCount < LocalFunctionArgumentsCounter::min) {
 			// if not, using lua_error to return an error
@@ -2037,17 +2054,32 @@ private:
 			luaError(state);
 		}
 		
-		// calling the function, note that "result" should be a tuple
+		// calling the function
 		try {
-			// pushing the result on the stack and returning number of pushed elements
-			typedef Pusher<typename std::decay<decltype(callWithTuple<TReturnType>(*toCall, *parameters))>::type>
-				P;
-			return P::push(state, callWithTuple<TReturnType>(*toCall, *parameters));
+			return callback2(state, *toCall, argumentsCount);
 
 		} catch (...) {
 			Pusher<std::exception_ptr>::push(state, std::current_exception()).release();
 			luaError(state);
 		}
+	}
+	
+	template<typename TFunctionObject>
+	static auto callback2(lua_State* state, TFunctionObject&& toCall, int argumentsCount)
+		-> typename std::enable_if<!std::is_void<TReturnType>::value && !std::is_void<TFunctionObject>::value, PushedObject>::type
+	{
+		// pushing the result on the stack and returning number of pushed elements
+		typedef Pusher<typename std::decay<TReturnType>::type>
+			P;
+		return P::push(state, readIntoFunction(state, tag<TReturnType>{}, toCall, -argumentsCount, tag<TParameters>{}...));
+	}
+	
+	template<typename TFunctionObject>
+	static auto callback2(lua_State* state, TFunctionObject&& toCall, int argumentsCount)
+		-> typename std::enable_if<std::is_void<TReturnType>::value && !std::is_void<TFunctionObject>::value, PushedObject>::type
+	{
+		readIntoFunction(state, tag<TReturnType>{}, toCall, -argumentsCount, tag<TParameters>{}...);
+		return PushedObject{state, 0};
 	}
 };
 
