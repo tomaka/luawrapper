@@ -1,5 +1,4 @@
 #include <LuaContext.hpp>
-#include <LuaContextThread.hpp>
 #include <gtest/gtest.h>
 
 TEST(Threads, Basics) {
