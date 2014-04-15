@@ -1412,10 +1412,7 @@ private:
 	/**************************************************/
 	// the "Reader" structures allow to read data from the stack
 	// - the "ReturnType" type is what is returned by the reader, and can be different than the template parameter (especially with references and constness)
-	// - the "test" static function will return true if the variable is of the right type
-	// - the "read" static function will assume that the variable is of the right type and read its value
-	// - the "testRead" static function will check and read at the same time, returning an empty optional if it is the wrong type
-	// - the "readSafe" static function does the same as "testRead" but throws in case of wrong type
+	// - the "read" static function will check and read at the same time, returning an empty optional if it is the wrong type
 	
 	template<typename TType, typename = void>
 	struct Reader {
