@@ -470,6 +470,38 @@ The syntax is the same than above, except that the callbacks take an extra `name
 Remember that you can return `std::function` from the read callback, allowing you to create real virtual objects.
 
 
+### Clean assembly generation
+
+This library is heavily-templated, which means that it may take additional time to compile but will generate very clean assembly code.
+
+For example this:
+
+    writeVariable("test", "a", 12);
+
+Will generate something like this:
+
+    movl    %ebx, (%esp)
+    movl    $2, 8(%esp)
+    movl    $-1001000, 4(%esp)
+    call    lua_rawgeti
+    movl    %ebx, (%esp)
+    movl    $.LC0, 4(%esp)      // contains "test"
+    call    lua_pushstring
+    movl    %ebx, (%esp)
+    movl    $-2, 4(%esp)
+    call    lua_gettable
+    movl    %ebx, (%esp)
+    movl    $12, 4(%esp)
+    call    lua_pushinteger
+    movl    %ebx, (%esp)
+    movl    $.LC1, 8(%esp)      // contains "a"
+    movl    $-2, 4(%esp)
+    call    lua_setfield
+    movl    %ebx, (%esp)
+    movl    $-3, 4(%esp)
+    call    lua_settop
+
+
 ### Compilation
 This code uses new functionalities from [C++11](http://en.wikipedia.org/wiki/C%2B%2B11).
 

@@ -2144,6 +2144,38 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
         lua_pushcclosure(state, function, 1);
         return PushedObject{state, 1};
     }
+	
+    // this is the version of "push" for pointer
+    template<typename TFunctionObject>
+    static auto push(lua_State* state, TFunctionObject* fn) noexcept
+        -> PushedObject
+    {
+        // when the lua script calls the thing we will push on the stack, we want "fn" to be executed
+        // since "fn" doesn't need to be destroyed, we simply push it on the stack
+
+        // this is the cfunction that is the callback
+        const auto function = [](lua_State* state) -> int
+        {
+            // the function object is an upvalue
+            const auto toCall = reinterpret_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
+            return callback(state, toCall, lua_gettop(state)).release();
+        };
+
+        // we copy the function object onto the stack
+		lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
+
+        // pushing the function with the function object as upvalue
+        lua_pushcclosure(state, function, 1);
+        return PushedObject{state, 1};
+    }
+	
+    // this is the version of "push" for references to functions
+    template<typename TFunctionObject>
+    static auto push(lua_State* state, TFunctionObject& fn) noexcept
+        -> typename std::enable_if<std::is_function<typename std::decay<TFunctionObject>::type>::value, PushedObject>::type
+    {
+		return push(state, &fn);
+    }
 
 private:
     // callback that calls the function object
