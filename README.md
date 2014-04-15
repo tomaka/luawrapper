@@ -388,17 +388,6 @@ The C++ equivalent for `nil` is `nullptr`.
 Note that `nullptr` has its own type, which is different from `0` and `NULL`.
 
 
-#### Threads
-
-Lua threads are not *real* threads, instead they allow you to have multiple execution contexts. This can be used to implement cooperative multitasking (not yet possible with this library) and/or to *fork* the global variables list.
-
-    LuaContext lua;
-    lua.writeVariable("a", 2);
-    
-    LuaContextThread thread1(&lua);
-    thread1.writeVariable("a", "hello");
-
-
 #### Custom member functions
 
 In example 3, we saw that you can register functions for a given type with `registerFunction`.
