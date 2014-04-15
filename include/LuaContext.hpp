@@ -1606,7 +1606,7 @@ private:
 
         const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
         if (!firstElem)
-			throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
+            throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
 
         Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
         return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
@@ -1620,7 +1620,7 @@ private:
 
         const auto& firstElem = Reader<typename std::decay<TFirstType>::type>::read(state, index);
         if (!firstElem)
-			throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
+            throw WrongTypeException(lua_typename(state, index), typeid(TFirstType));
 
         Binder<TCallback, const TFirstType&> binder{ callback, *firstElem };
         return readIntoFunction(state, retValueTag, binder, index + 1, othersTags...);
@@ -2141,10 +2141,9 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
         lua_pushcclosure(state, function, 1);
         return PushedObject{state, 1};
     }
-	
-    // this is the version of "push" for pointer
-    template<typename TFunctionObject>
-    static auto push(lua_State* state, TFunctionObject* fn) noexcept
+    
+    // this is the version of "push" for pointer to functions
+    static auto push(lua_State* state, TReturnType (*fn)(TParameters...)) noexcept
         -> PushedObject
     {
         // when the lua script calls the thing we will push on the stack, we want "fn" to be executed
@@ -2154,24 +2153,23 @@ struct LuaContext::Pusher<TReturnType (TParameters...)>
         const auto function = [](lua_State* state) -> int
         {
             // the function object is an upvalue
-            const auto toCall = reinterpret_cast<TFunctionObject*>(lua_touserdata(state, lua_upvalueindex(1)));
+            const auto toCall = reinterpret_cast<TReturnType (*)(TParameters...)>(lua_touserdata(state, lua_upvalueindex(1)));
             return callback(state, toCall, lua_gettop(state)).release();
         };
 
         // we copy the function object onto the stack
-		lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
+        lua_pushlightuserdata(state, reinterpret_cast<void*>(fn));
 
         // pushing the function with the function object as upvalue
         lua_pushcclosure(state, function, 1);
         return PushedObject{state, 1};
     }
-	
+    
     // this is the version of "push" for references to functions
-    template<typename TFunctionObject>
-    static auto push(lua_State* state, TFunctionObject& fn) noexcept
-        -> typename std::enable_if<std::is_function<typename std::decay<TFunctionObject>::type>::value, PushedObject>::type
+    static auto push(lua_State* state, TReturnType (&fn)(TParameters...)) noexcept
+        -> PushedObject
     {
-		return push(state, &fn);
+        return push(state, &fn);
     }
 
 private:
@@ -2205,7 +2203,7 @@ private:
         try {
             return callback2(state, *toCall, argumentsCount);
 
-		} catch (const WrongTypeException& ex) {
+        } catch (const WrongTypeException& ex) {
             // wrong parameter type, using lua_error to return an error
             luaL_where(state, 1);
             lua_pushstring(state, "Unable to convert parameter from ");
