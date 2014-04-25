@@ -99,6 +99,25 @@ TEST(CustomTypes, ConstVolatileMemberFunctions) {
     EXPECT_EQ(4, context.executeCode<int>("return obj:fooCV()"));
 }
 
+TEST(CustomTypes, MemberFunctionsReturnedObjects) {
+	struct Object {
+		int add(int x) { return x + 2; } 
+    };
+    
+    LuaContext context;
+    context.registerFunction("add", &Object::add);
+	
+    context.writeVariable("Object", LuaContext::EmptyArray);
+    context.writeFunction("Object", "newRaw", []() { return Object{}; });
+	Object obj;
+    context.writeFunction("Object", "newPtr", [&]() { return &obj; });
+    context.writeFunction("Object", "newSharedPtr", []() { return std::make_shared<Object>{}; });
+    
+    EXPECT_EQ(12, context.executeCode<int>("return Object.newRaw():add(10)"));
+    EXPECT_EQ(17, context.executeCode<int>("return Object.newPtr():add(15)"));
+    EXPECT_EQ(22, context.executeCode<int>("return Object.newSharedPtr():add(20)"));
+}
+
 TEST(CustomTypes, MembersPlain) {
 	struct Object {
 		int value;
