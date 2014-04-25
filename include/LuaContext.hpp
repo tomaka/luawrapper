@@ -2405,21 +2405,21 @@ struct LuaContext::Reader<
     static auto read(lua_State* state, int index)
         -> boost::optional<TType>
     {
-#		if LUA_VERSION_NUM >= 502
+#       if LUA_VERSION_NUM >= 502
 
-			int success;
-			auto value = lua_tointegerx(state, index, &success);
-			if (success == 0)
-				return boost::none;
-			return static_cast<TType>(value);
+            int success;
+            auto value = lua_tointegerx(state, index, &success);
+            if (success == 0)
+                return boost::none;
+            return static_cast<TType>(value);
 
-#		else
+#       else
 
-			if (!lua_isnumber(state, index))
-				return boost::none;
-			return static_cast<TType>(lua_tointeger(state, index));
+            if (!lua_isnumber(state, index))
+                return boost::none;
+            return static_cast<TType>(lua_tointeger(state, index));
 
-#		endif
+#       endif
     }
 };
 
@@ -2435,21 +2435,21 @@ struct LuaContext::Reader<
     static auto read(lua_State* state, int index)
         -> boost::optional<TType>
     {
-#		if LUA_VERSION_NUM >= 502
+#       if LUA_VERSION_NUM >= 502
 
-			int success;
-			auto value = lua_tonumberx(state, index, &success);
-			if (success == 0)
-				return boost::none;
-			return static_cast<TType>(value);
+            int success;
+            auto value = lua_tonumberx(state, index, &success);
+            if (success == 0)
+                return boost::none;
+            return static_cast<TType>(value);
 
-#		else
+#       else
 
-			if (!lua_isnumber(state, index))
-				return boost::none;
-			return static_cast<TType>(lua_tonumber(state, index));
+            if (!lua_isnumber(state, index))
+                return boost::none;
+            return static_cast<TType>(lua_tonumber(state, index));
 
-#		endif
+#       endif
     }
 };
 

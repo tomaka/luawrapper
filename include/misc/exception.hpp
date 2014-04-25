@@ -35,50 +35,50 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 
 #ifdef _MSC_VER
-#	define EXCEPTION_HPP_NORETURN_MACRO __declspec(noreturn)
+#   define EXCEPTION_HPP_NORETURN_MACRO __declspec(noreturn)
 #else
-#	define EXCEPTION_HPP_NORETURN_MACRO [[noreturn]]
+#   define EXCEPTION_HPP_NORETURN_MACRO [[noreturn]]
 #endif
 
 namespace std {
-	class nested_exception {
-	public:
-		nested_exception() : nested(current_exception()) {}
-		virtual ~nested_exception() {}
+    class nested_exception {
+    public:
+        nested_exception() : nested(current_exception()) {}
+        virtual ~nested_exception() {}
 
-		EXCEPTION_HPP_NORETURN_MACRO
-		void rethrow_nested() const 		{ std::rethrow_exception(nested); }
+        EXCEPTION_HPP_NORETURN_MACRO
+        void rethrow_nested() const         { std::rethrow_exception(nested); }
 
-		exception_ptr nested_ptr() const		{ return nested; }
+        exception_ptr nested_ptr() const        { return nested; }
 
 
-	private:
-		exception_ptr nested;
-	};
+    private:
+        exception_ptr nested;
+    };
 
-	template<typename T>
-	EXCEPTION_HPP_NORETURN_MACRO
-	void throw_with_nested(T&& t)
-	{
-		typedef remove_reference<T>::type RealT;
+    template<typename T>
+    EXCEPTION_HPP_NORETURN_MACRO
+    void throw_with_nested(T&& t)
+    {
+        typedef remove_reference<T>::type RealT;
 
-		struct ThrowWithNestedExcept : nested_exception, RealT
-		{
-			ThrowWithNestedExcept(T&& t) : RealT(std::forward<T>(t)) {}
-		};
+        struct ThrowWithNestedExcept : nested_exception, RealT
+        {
+            ThrowWithNestedExcept(T&& t) : RealT(std::forward<T>(t)) {}
+        };
 
-		if (is_base_of<nested_exception,RealT>::value)
-			throw std::forward<T>(t);
-		else
-			throw ThrowWithNestedExcept(std::forward<T>(t));
-	}
+        if (is_base_of<nested_exception,RealT>::value)
+            throw std::forward<T>(t);
+        else
+            throw ThrowWithNestedExcept(std::forward<T>(t));
+    }
 
-	template<typename E>
-	void rethrow_if_nested(const E& e)
-	{
-		const auto ptr = dynamic_cast<const std::nested_exception*>(&e);
-		if (ptr) ptr->rethrow_nested();
-	}
+    template<typename E>
+    void rethrow_if_nested(const E& e)
+    {
+        const auto ptr = dynamic_cast<const std::nested_exception*>(&e);
+        if (ptr) ptr->rethrow_nested();
+    }
 }
 
 #endif
