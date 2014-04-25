@@ -111,7 +111,7 @@ TEST(CustomTypes, MemberFunctionsReturnedObjects) {
     context.writeFunction("Object", "newRaw", []() { return Object{}; });
 	Object obj;
     context.writeFunction("Object", "newPtr", [&]() { return &obj; });
-    context.writeFunction("Object", "newSharedPtr", []() { return std::make_shared<Object>{}; });
+    context.writeFunction("Object", "newSharedPtr", []() { return std::make_shared<Object>(); });
     
     EXPECT_EQ(12, context.executeCode<int>("return Object.newRaw():add(10)"));
     EXPECT_EQ(17, context.executeCode<int>("return Object.newPtr():add(15)"));
