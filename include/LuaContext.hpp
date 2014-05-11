@@ -2382,8 +2382,6 @@ private:
 template<>
 struct LuaContext::Reader<std::nullptr_t>
 {
-    using ReturnType = std::nullptr_t;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<std::nullptr_t>
     {
@@ -2400,8 +2398,6 @@ struct LuaContext::Reader<
             typename std::enable_if<std::is_integral<TType>::value>::type
         >
 {
-    using ReturnType = TType;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<TType>
     {
@@ -2430,8 +2426,6 @@ struct LuaContext::Reader<
             typename std::enable_if<std::is_floating_point<TType>::value>::type
         >
 {
-    using ReturnType = TType;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<TType>
     {
@@ -2457,8 +2451,6 @@ struct LuaContext::Reader<
 template<>
 struct LuaContext::Reader<bool>
 {
-    using ReturnType = bool;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<bool>
     {
@@ -2474,8 +2466,6 @@ struct LuaContext::Reader<bool>
 template<>
 struct LuaContext::Reader<std::string>
 {
-    using ReturnType = std::string;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<std::string>
     {
@@ -2493,8 +2483,6 @@ struct LuaContext::Reader<
             typename std::enable_if<std::is_enum<TType>::value>::type
         >
 {
-    using ReturnType = TType;
-
     static auto read(lua_State* state, int index)
         -> boost::optional<TType>
     {
@@ -2524,15 +2512,16 @@ struct LuaContext::Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters..
 template<typename TRetValue, typename... TParameters>
 struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 {
-    typedef Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>
-        SubReader;
-    typedef typename SubReader::ReturnType
-        ReturnType;
-
     static auto read(lua_State* state, int index)
-        -> boost::optional<ReturnType>
+        -> boost::optional<std::function<TRetValue (TParameters...)>>
     {
-        return SubReader::read(state, index);
+		if (auto val = Reader<LuaContext::LuaFunctionCaller<TRetValue (TParameters...)>>::read(state, index))
+		{
+			std::function<TRetValue (TParameters...)> f{*val};
+			return boost::optional<std::function<TRetValue (TParameters...)>>{std::move(f)};
+		}
+
+        return boost::none;
     }
 };
 
@@ -2540,28 +2529,21 @@ struct LuaContext::Reader<std::function<TRetValue (TParameters...)>>
 template<typename TType1, typename TType2>
 struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 {
-    typedef Reader<typename std::decay<TType1>::type>
-        Type1Reader;
-    typedef Reader<typename std::decay<TType2>::type>
-        Type2Reader;
-    using ReturnType =
-        std::vector<std::pair<typename Type1Reader::ReturnType, typename Type2Reader::ReturnType>>;
-    
     static auto read(lua_State* state, int index)
-        -> boost::optional<ReturnType>
+        -> boost::optional<std::vector<std::pair<TType1, TType2>>>
     {
         if (!lua_istable(state, index))
             return boost::none;
 
-        ReturnType result;
+        std::vector<std::pair<TType1, TType2>> result;
 
         // we traverse the table at the top of the stack
         lua_pushnil(state);     // first key
         while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
             // now a key and its value are pushed on the stack
             try {
-                auto val1 = Type1Reader::read(state, -2);
-                auto val2 = Type2Reader::read(state, -1);
+                auto val1 = Reader<TType1>::read(state, -2);
+                auto val2 = Reader<TType2>::read(state, -1);
 
                 if (!val1.is_initialized() || !val2.is_initialized()) {
                     lua_pop(state, 2);      // we remove the value and the key
@@ -2585,28 +2567,21 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
 template<typename TKey, typename TValue>
 struct LuaContext::Reader<std::map<TKey,TValue>>
 {
-    typedef Reader<typename std::decay<TKey>::type>
-        KeyReader;
-    typedef Reader<typename std::decay<TValue>::type>
-        ValueReader;
-    using ReturnType =
-        std::map<typename KeyReader::ReturnType, typename ValueReader::ReturnType>;
-    
     static auto read(lua_State* state, int index)
-        -> boost::optional<ReturnType>
+        -> boost::optional<std::map<TKey,TValue>>
     {
         if (!lua_istable(state, index))
             return boost::none;
 
-        ReturnType result;
+        std::map<TKey,TValue> result;
 
         // we traverse the table at the top of the stack
         lua_pushnil(state);     // first key
         while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
             // now a key and its value are pushed on the stack
             try {
-                auto key = KeyReader::read(state, -2);
-                auto value = ValueReader::read(state, -1);
+                auto key = Reader<TKey>::read(state, -2);
+                auto value = Reader<TValue>::read(state, -1);
 
                 if (!key.is_initialized() || !value.is_initialized()) {
                     lua_pop(state, 2);      // we remove the value and the key
@@ -2630,28 +2605,21 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
 template<typename TKey, typename TValue>
 struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 {
-    typedef Reader<typename std::decay<TKey>::type>
-        KeyReader;
-    typedef Reader<typename std::decay<TValue>::type>
-        ValueReader;
-    using ReturnType =
-        std::unordered_map<typename KeyReader::ReturnType, typename ValueReader::ReturnType>;
-
     static auto read(lua_State* state, int index)
-        -> boost::optional<ReturnType>
+        -> boost::optional<std::unordered_map<TKey,TValue>>
     {
         if (!lua_istable(state, index))
             return boost::none;
 
-        ReturnType result;
+        std::unordered_map<TKey,TValue> result;
 
         // we traverse the table at the top of the stack
         lua_pushnil(state);     // first key
         while (lua_next(state, (index > 0) ? index : (index - 1)) != 0) {
             // now a key and its value are pushed on the stack
             try {
-                auto key = KeyReader::read(state, -2);
-                auto value = ValueReader::read(state, -1);
+                auto key = Reader<TKey>::read(state, -2);
+                auto value = Reader<TValue>::read(state, -1);
 
                 if (!key.is_initialized() || !value.is_initialized()) {
                     lua_pop(state, 2);      // we remove the value and the key
@@ -2679,17 +2647,12 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
 template<typename TType>
 struct LuaContext::Reader<boost::optional<TType>>
 {
-    typedef Reader<typename std::decay<TType>::type>
-        SubReader;
-    using ReturnType =
-        boost::optional<typename SubReader::ReturnType>;
-
     static auto read(lua_State* state, int index)
-        -> boost::optional<ReturnType>
+        -> boost::optional<boost::optional<TType>>
     {
         if (lua_isnil(state, index))
-            return ReturnType{boost::none};
-        if (auto&& other = SubReader::read(state, index))
+            return boost::optional<TType>{boost::none};
+        if (auto&& other = Reader<TType>::read(state, index))
             return std::move(other);
         return boost::none;
     }
@@ -2699,24 +2662,9 @@ struct LuaContext::Reader<boost::optional<TType>>
 template<typename... TTypes>
 struct LuaContext::Reader<boost::variant<TTypes...>>
 {
-private:
-    // this type satisfies the "MPL metaclass" requirement, and can transform a list of types into what the Reader would read from them
-    struct ReturnTypeApplier
-    {
-        template<typename T>
-        struct apply
-        {
-            typedef typename Reader<typename std::decay<T>::type>::ReturnType
-                type;
-        };
-    };
+	typedef boost::variant<TTypes...>
+		ReturnType;
 
-public:
-    typedef boost::variant<TTypes...>
-        RawVariant;
-    typedef typename boost::make_variant_over<typename boost::mpl::transform<typename RawVariant::types, ReturnTypeApplier>::type>::type
-        ReturnType;
-    
 private:
     // class doing operations for a range of types from TIterBegin to TIterEnd
     template<typename TIterBegin, typename TIterEnd, typename = void>
@@ -2729,7 +2677,7 @@ private:
         {
             // note: using SubReader::read triggers a compilation error when used with a reference
             if (const auto val = SubReader::read(state, index))
-                return ReturnType{*val};
+                return boost::variant<TTypes...>{*val};
             return VariantReader<typename boost::mpl::next<TIterBegin>::type, TIterEnd>::read(state, index);
         }
     };
@@ -2746,7 +2694,7 @@ private:
     };
 
     // this is the main type
-    typedef VariantReader<typename boost::mpl::begin<typename RawVariant::types>::type, typename boost::mpl::end<typename RawVariant::types>::type>
+    typedef VariantReader<typename boost::mpl::begin<typename ReturnType::types>::type, typename boost::mpl::end<typename ReturnType::types>::type>
         MainVariantReader;
 
 public:
@@ -2763,8 +2711,6 @@ public:
 template<>
 struct LuaContext::Reader<std::tuple<>>
 {
-    using ReturnType = std::tuple<>;
-    
     static auto read(lua_State* state, int index, int maxSize = 0)
         -> boost::optional<std::tuple<>>
     {
@@ -2779,26 +2725,22 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
 {
     // this is the "TFirst is NOT default constructible" version
 
-    typedef Reader<typename std::decay<TFirst>::type>
-        TFirstReader;
-    typedef Reader<std::tuple<TOthers...>>
-        TOthersReader;
-    typedef decltype(std::tuple_cat(std::declval<std::tuple<typename TFirstReader::ReturnType>>(), std::declval<typename TOthersReader::ReturnType>()))
-        ReturnType;
-    
+	typedef std::tuple<TFirst, TOthers...>
+		ReturnType;
+
     static auto read(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
         -> boost::optional<ReturnType>
     {
         if (maxSize <= 0)
             return boost::none;
 
-        auto firstVal = TFirstReader::read(state, index);
-        auto othersVal = TOthersReader::read(state, index + 1, maxSize - 1);
+        auto firstVal = Reader<TFirst>::read(state, index);
+        auto othersVal = Reader<std::tuple<TOthers...>>::read(state, index + 1, maxSize - 1);
         
         if (!firstVal || !othersVal)
             return boost::none;
 
-        return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(std::forward<typename TFirstReader::ReturnType>(*firstVal)), std::move(*othersVal));
+        return std::tuple_cat(std::tuple<TFirst>(*firstVal), std::move(*othersVal));
     }
 };
 
@@ -2808,29 +2750,25 @@ struct LuaContext::Reader<std::tuple<TFirst, TOthers...>,
     >
 {
     // this is the "TFirst is default-constructible" version
+	
+	typedef std::tuple<TFirst, TOthers...>
+		ReturnType;
     
-    typedef Reader<typename std::decay<TFirst>::type>
-        TFirstReader;
-    typedef Reader<std::tuple<TOthers...>>
-        TOthersReader;
-    typedef decltype(std::tuple_cat(std::declval<std::tuple<typename TFirstReader::ReturnType>>(), std::declval<typename TOthersReader::ReturnType>()))
-        ReturnType;
-
     static auto read(lua_State* state, int index, int maxSize = std::tuple_size<ReturnType>::value)
         -> boost::optional<ReturnType>
     {
-        auto othersVal = TOthersReader::read(state, index + 1, maxSize - 1);
+        auto othersVal = Reader<std::tuple<TOthers...>>::read(state, index + 1, maxSize - 1);
         if (!othersVal)
             return boost::none;
         
         if (maxSize <= 0)
-            return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(), std::move(*othersVal));
+            return std::tuple_cat(std::tuple<TFirst>(), std::move(*othersVal));
         
-        auto firstVal = TFirstReader::read(state, index);
+        auto firstVal = Reader<TFirst>::read(state, index);
         if (!firstVal)
             return boost::none;
 
-        return std::tuple_cat(std::tuple<typename TFirstReader::ReturnType>(std::forward<typename TFirstReader::ReturnType>(*firstVal)), std::move(*othersVal));
+        return std::tuple_cat(std::tuple<TFirst>(*firstVal), std::move(*othersVal));
     }
 };
 

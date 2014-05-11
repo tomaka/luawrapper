@@ -23,7 +23,7 @@ TEST(AdvancedReadWrite, VariantError) {
     LuaContext context;
     
     context.writeVariable("a", "test");
-    EXPECT_THROW((context.readVariable<boost::variant<bool,int,bool*>>("a")), LuaContext::WrongTypeException);
+    EXPECT_THROW((context.readVariable<boost::variant<bool,int,std::vector<double>>>("a")), LuaContext::WrongTypeException);
 }
 
 TEST(AdvancedReadWrite, ReadingOptional) {
