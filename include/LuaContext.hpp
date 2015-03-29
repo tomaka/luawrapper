@@ -1702,10 +1702,10 @@ private:
 };
 
 /// @deprecated
-static LuaContext::EmptyArray_t
+static LuaContext::EmptyArray_t __attribute__((unused))
     LuaEmptyArray {};
 /// @deprecated
-static LuaContext::Metatable_t
+static LuaContext::Metatable_t __attribute__((unused))
     LuaMetatable {};
     
 /**************************************************/
