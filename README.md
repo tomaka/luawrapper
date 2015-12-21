@@ -1,3 +1,7 @@
+**This fork isn't maintained.**
+Please see https://github.com/ahupowerdns/luawrapper
+
+
 ## Tomaka's lua wrapper
 
 [![Build Status](https://travis-ci.org/Tomaka17/luawrapper.svg?branch=master)](https://travis-ci.org/Tomaka17/luawrapper)
