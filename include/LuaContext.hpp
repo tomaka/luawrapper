@@ -90,12 +90,7 @@ public:
             throw std::bad_alloc();
 
         // setting the panic function
-        lua_atpanic(mState, [](lua_State* state) -> int {
-            const std::string str = lua_tostring(state, -1);
-            lua_pop(state, 1);
-            assert(false && "lua_atpanic triggered");
-            exit(0);
-        });
+        lua_atpanic(mState, panicFunction);
 
         // opening default library if required to do so
         if (openDefaultLibs)
@@ -111,6 +106,13 @@ public:
         s.mState = luaL_newstate();
     }
     
+    static int panicFunction(lua_State* state) {
+        const std::string str = lua_tostring(state, -1);
+        lua_pop(state, 1);
+        assert(false && "lua_atpanic triggered");
+        exit(0);
+    }
+
     /**
      * Move operator
      */
@@ -688,7 +690,7 @@ private:
         PushedObject& operator=(PushedObject&& other) { std::swap(state, other.state); std::swap(num, other.num); return *this; }
         PushedObject(PushedObject&& other) : state(other.state), num(other.num) { other.num = 0; }
 
-        PushedObject operator+(PushedObject&& other) && { PushedObject obj(state, num + other.num); num = 0; other.num = 0; return std::move(obj); }
+        PushedObject operator+(PushedObject&& other) { PushedObject obj(state, num + other.num); num = 0; other.num = 0; return obj; }
         void operator+=(PushedObject&& other) { assert(state == other.state); num += other.num; other.num = 0; }
         
         auto getState() const -> lua_State* { return state; }
@@ -1026,9 +1028,11 @@ private:
         lua_settable(state, LUA_REGISTRYINDEX);
     }
 
-    // 
 #   ifdef _MSC_VER
-        __declspec(noreturn)
+    __declspec(noreturn)
+#	elif __GNUC__ == 4 && __GNUC_MINOR__ < 8
+    // [[noreturn]] is only defined for gcc > 4.7
+    __attribute__((noreturn))
 #   else
         [[noreturn]]
 #   endif
@@ -1804,6 +1808,8 @@ public:
         return call<TRetValue>(state, std::move(obj), std::forward<TParams>(params)...);
     }
 
+    LuaFunctionCaller():state(nullptr){}
+
 private:
     std::shared_ptr<ValueInRegistry>    valueHolder;
     lua_State*                          state;
@@ -1915,6 +1921,18 @@ struct LuaContext::Pusher<LuaContext::EmptyArray_t> {
 
     static PushedObject push(lua_State* state, EmptyArray_t) noexcept {
         lua_newtable(state);
+        return PushedObject{state, 1};
+    }
+};
+
+// pointers
+template<>
+struct LuaContext::Pusher<void*> {
+    static const int minSize = 1;
+    static const int maxSize = 1;
+
+    static PushedObject push(lua_State* state, void* ptr) noexcept {
+        lua_pushlightuserdata(state, const_cast<void*>(ptr));
         return PushedObject{state, 1};
     }
 };
