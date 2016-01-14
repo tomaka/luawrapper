@@ -1762,10 +1762,18 @@ template<>
 struct LuaContext::PusherTotalMaxSize<> { static const int size = 0; };
 
 // implementation of PusherMinSize
-template<typename TFirst, typename... TTypes>
-struct LuaContext::PusherMinSize<TFirst, TTypes...> { static const int size = Pusher<typename std::decay<TFirst>::type>::minSize < PusherTotalMaxSize<TTypes...>::size ? Pusher<typename std::decay<TFirst>::type>::minSize : PusherMinSize<TTypes...>::size; };
-template<>
-struct LuaContext::PusherMinSize<> { static const int size = 0; };
+template<typename TFirst, typename TSecond, typename... TTypes>
+struct LuaContext::PusherMinSize<TFirst, TSecond, TTypes...> 
+{ 
+    static const int size = Pusher<typename std::decay<TFirst>::type>::minSize < Pusher<typename std::decay<TSecond>::type>::minSize 
+                            ? 
+                            PusherMinSize<typename std::decay<TFirst>::type, TTypes...>::size 
+                            : 
+                            PusherMinSize<typename std::decay<TSecond>::type, TTypes...>::size;
+};
+
+template<typename TFirst>
+struct LuaContext::PusherMinSize<TFirst> { static const int size = Pusher<typename std::decay<TFirst>::type>::minSize; };
 
 // implementation of PusherMaxSize
 template<typename TFirst, typename... TTypes>
