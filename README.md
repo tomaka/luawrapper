@@ -1,6 +1,5 @@
-## Tomaka's lua wrapper
-
-[![Build Status](https://travis-ci.org/Tomaka17/luawrapper.svg?branch=master)](https://travis-ci.org/Tomaka17/luawrapper)
+## Tomaka's lua wrapper - under new maintainership
+This Lua Wrapper was authored by Pierre Krieger. After a tremendous amount of work on the code, Pierre has moved on to other things. Thank you Pierre! PowerDNS depends on Luawrapper, so we have committed to keep the code compiling with modern compilers, fix bugs and perhaps do the odd enhancement here and there.
 
 ### What is this library?
 This lua wrapper for C++ is a library which allows you to easily manage lua code. It was designed to be as simple as possible to use.
