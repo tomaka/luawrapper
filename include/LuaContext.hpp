@@ -55,7 +55,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <lua.hpp>
 
 #ifdef _MSC_VER
-#   include "misc/exception.hpp"
+#   if _MSC_VER <= 1800
+#       include "misc/exception.hpp"
+#   endif
 #endif
 
 #ifdef __GNUC__
