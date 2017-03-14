@@ -41,6 +41,16 @@ TEST(BasicReadWrite, Strings) {
     EXPECT_EQ("world", context.readVariable<std::string>("b"));
 }
 
+TEST(BasicReadWrite, StringWithNUL) {
+    LuaContext context;
+
+    context.executeCode("a = 'hello'..string.char(0)..'world'");
+    EXPECT_EQ(std::string("hello\0world", 11), context.readVariable<std::string>("a"));
+
+    context.writeVariable("b", std::string("hello\0world", 11));
+    EXPECT_EQ(std::string("hello\0world", 11), context.executeCode<std::string>("return b"));
+}
+
 TEST(BasicReadWrite, Enums) {
     enum class Foo {
         A,
