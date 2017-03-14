@@ -1,22 +1,19 @@
+dist: trusty
+sudo: required
 language: cpp
 compiler:
   - gcc
   - clang
 before_install:
-  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-  - echo "deb http://llvm.org/apt/quantal/ llvm-toolchain-quantal main" | sudo tee -a /etc/apt/sources.list
-  - wget -O - http://llvm.org/apt/llvm-snapshot.gpg.key | sudo apt-key add -
   - sudo apt-get -qq update
   - sudo apt-get install libboost-dev
   - sudo apt-get install $LUA
-  - 'if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi'
-  - 'if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi'
   - mkdir build
   - cd build
   - $CXX --version
   - cmake -DCMAKE_CXX_FLAGS="-Wall $CXX_FLAGS" ..
 script:
-  - make
+  - make VERBOSE=1
   - ./tests
 env:
   - LUA="liblua5.1-dev"
@@ -24,5 +21,4 @@ env:
   - LUA="libluajit-5.1-dev"
 matrix:
   allow_failures:
-    - compiler: clang
     - env: LUA="libluajit-5.1-dev"
