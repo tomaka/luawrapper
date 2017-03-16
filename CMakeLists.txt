@@ -25,10 +25,10 @@ include_directories(include)
 include(ExternalProject)
 
 # gtest
-find_package(Subversion REQUIRED)
+find_package(Git REQUIRED)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty/googletest-src)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty/googletest-bin)
-execute_process(COMMAND ${Subversion_SVN_EXECUTABLE} checkout http://googletest.googlecode.com/svn/trunk/ googletest-src WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty)
+execute_process(COMMAND ${GIT_EXECUTABLE} clone https://github.com/google/googletest.git googletest-src WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/ThirdParty)
 add_subdirectory(${CMAKE_BINARY_DIR}/ThirdParty/googletest-src ThirdParty/googletest-bin)
 include_directories(${CMAKE_BINARY_DIR}/ThirdParty/googletest-src/include)
 
