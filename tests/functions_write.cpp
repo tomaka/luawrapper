@@ -217,3 +217,25 @@ TEST(FunctionsWrite, ExecuteLuaFromWithinCallback) {
 
     context.executeCode("exec(\"x\")");
 }
+
+TEST(FunctionsWrite, CallbackNotLastArgument) {
+    LuaContext context;
+
+    struct Foo {
+        static int a(void)
+        {
+            return 1;
+        }
+
+        static int b(void)
+        {
+            return 2;
+        }
+    };
+
+    context.writeFunction("foo", [](std::function<int(void)> a, std::function<int(void)> b) {
+        return a();
+    });
+
+    EXPECT_EQ(1, context.executeCode<int>("function a() return 1 end function b() return 2 end return foo(a,b)"));
+}
