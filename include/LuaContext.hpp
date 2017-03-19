@@ -546,7 +546,7 @@ public:
         result.threadInRegistry = std::unique_ptr<ValueInRegistry>(new ValueInRegistry(mState));
         lua_pop(mState, 1);
 
-        return std::move(result);
+        return result;
     }
 
     /**
@@ -688,7 +688,7 @@ private:
         PushedObject& operator=(PushedObject&& other) { std::swap(state, other.state); std::swap(num, other.num); return *this; }
         PushedObject(PushedObject&& other) : state(other.state), num(other.num) { other.num = 0; }
 
-        PushedObject operator+(PushedObject&& other) && { PushedObject obj(state, num + other.num); num = 0; other.num = 0; return std::move(obj); }
+        PushedObject operator+(PushedObject&& other) && { PushedObject obj(state, num + other.num); num = 0; other.num = 0; return obj; }
         void operator+=(PushedObject&& other) { assert(state == other.state); num += other.num; other.num = 0; }
         
         auto getState() const -> lua_State* { return state; }
@@ -1527,7 +1527,7 @@ private:
             lua_setmetatable(state, -2);
             pushedTable.release();
             
-            return std::move(obj);
+            return obj;
         }
     };
     
@@ -1966,7 +1966,7 @@ struct LuaContext::Pusher<std::map<TKey,TValue>> {
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
             setTable<TValue>(state, obj, i->first, i->second);
         
-        return std::move(obj);
+        return obj;
     }
 };
 
@@ -1985,7 +1985,7 @@ struct LuaContext::Pusher<std::unordered_map<TKey,TValue>> {
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
             setTable<TValue>(state, obj, i->first, i->second);
         
-        return std::move(obj);
+        return obj;
     }
 };
 
@@ -2004,7 +2004,7 @@ struct LuaContext::Pusher<std::vector<std::pair<TType1,TType2>>> {
         for (auto i = value.begin(), e = value.end(); i != e; ++i)
             setTable<TType2>(state, obj, i->first, i->second);
         
-        return std::move(obj);
+        return obj;
     }
 };
 
@@ -2022,7 +2022,7 @@ struct LuaContext::Pusher<std::vector<TType>> {
         for (unsigned int i = 0; i < value.size(); ++i)
             setTable<TType>(state, obj, i + 1, value[i]);
         
-        return std::move(obj);
+        return obj;
     }
 };
 
@@ -2310,7 +2310,7 @@ struct LuaContext::Pusher<boost::variant<TTypes...>>
         PushedObject obj{state, 0};
         VariantWriter writer{state, obj};
         value.apply_visitor(writer);
-        return std::move(obj);
+        return obj;
     }
 
 private:
