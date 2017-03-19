@@ -69,3 +69,15 @@ TEST(FunctionsRead, CallLuaFunctionFromWithinCallback) {
         execute("test")
     )");
 }
+
+TEST(FunctionsRead, LuaFunctionsPassUniquePtr) {
+    struct Foo {
+    };
+
+    LuaContext context;
+
+    context.executeCode("f = function(x) return 4; end");
+    const auto f = context.readVariable<std::function<int (std::unique_ptr<Foo>)>>("f");
+
+    EXPECT_EQ(4, f(std::unique_ptr<Foo>(new Foo())));
+}
