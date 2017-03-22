@@ -1908,8 +1908,7 @@ struct LuaContext::Pusher<std::nullptr_t> {
     static const int minSize = 1;
     static const int maxSize = 1;
 
-    static PushedObject push(lua_State* state, std::nullptr_t value) noexcept {
-        assert(value == nullptr);
+    static PushedObject push(lua_State* state, std::nullptr_t) noexcept {
         lua_pushnil(state);
         return PushedObject{state, 1};
     }
