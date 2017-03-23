@@ -62,7 +62,12 @@ IF(LUA_LIBRARY)
     SET( LUA_LIBRARIES "${LUA_LIBRARY};${LUA_MATH_LIBRARY}" CACHE STRING "Lua Libraries")
   # For Windows and Mac, don't need to explicitly include the math library
   ELSE(UNIX AND NOT APPLE)
-    SET( LUA_LIBRARIES "${LUA_LIBRARY}" CACHE STRING "Lua Libraries")
+    IF(APPLE)
+      # For Mac, need these flags to build working binaries
+      SET( LUA_LIBRARIES "${LUA_LIBRARY};-pagezero_size 10000;-image_base 100000000" CACHE STRING "Lua Libraries")
+    ELSE(APPLE)
+      SET( LUA_LIBRARIES "${LUA_LIBRARY}" CACHE STRING "Lua Libraries")
+    ENDIF(APPLE)
   ENDIF(UNIX AND NOT APPLE)
 ENDIF(LUA_LIBRARY)
 
