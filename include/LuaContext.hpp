@@ -1401,16 +1401,25 @@ private:
     }
     
     static int gettraceback(lua_State* L) {
-        std::cerr<<"gettraceback called, gettop="<<lua_gettop(L)<<std::endl;
-        lua_getglobal(L, "debug"); // +1 
-        lua_getfield(L, -1, "traceback"); // +1
-        lua_remove(L, -2); // -1 remove "debug"
-        lua_pushvalue(L, -2); // copy error message +1
-        lua_remove(L, -3); // remove error message -1
-        lua_pushinteger(L, 2); // +1
-        lua_call(L, 2, 1); // -3 +1
+        std::cerr<<"gettraceback called, gettop="<<lua_gettop(L)<<std::endl; // stack: error
+        lua_getglobal(L, "debug"); // stack: error, "debug"
+        lua_getfield(L, -1, "traceback"); // stack: error, "debug", debug.traceback
+        lua_remove(L, -2); // stack: error, debug.traceback
+        lua_pushnil(L); // stack: error, debug.traceback, nil
+        lua_pushinteger(L, 2); // stack: error, debug.traceback, nil, 2
+        lua_call(L, 2, 1); // stack: error, traceback
         std::cerr<<"traceback: "<<lua_tostring(L, -1)<<std::endl;
-        return 1;
+        // stack now holds error message at -2 (1) and traceback at -1 (2)
+        std::cerr<<"gettraceback ending, gettop="<<lua_gettop(L)<<std::endl;
+        lua_createtable(L, 2, 0); // stack: error, traceback, {}
+        lua_insert(L, 1); // stack: {}, error, traceback
+        lua_pushnumber(L, 2); // stack: {}, error, traceback, 2
+        lua_insert(L, -2); // stack: {}, error, 2, traceback
+        lua_settable(L, 1); // stack: {[2]=traceback}, error
+        lua_pushnumber(L, 1); // stack: {[2]=traceback}, error, 1
+        lua_insert(L, -2); // stack: {[2]=traceback}, 1, error
+        lua_settable(L, 1); // stack: {[1]=error, [2]=traceback}
+        return 1; // return the table
     }
 
     // this function just calls lua_pcall and checks for errors
@@ -1439,6 +1448,18 @@ private:
 
         // if pcall failed, analyzing the problem and throwing
         if (pcallReturnValue != 0) {
+            std::cerr<<"F: "<<lua_gettop(state)<<std::endl;
+
+            // stack top: {error, traceback}
+            lua_pushnumber(state, 1); // stack top: {error, traceback}, 1
+            lua_gettable(state, -2); // stack top: {error, traceback}, error
+            lua_pushnumber(state, 2); // stack top: {error, traceback}, error, 2
+            lua_gettable(state, -3); // stack top: {error, traceback}, error, traceback
+            lua_remove(state, -3); // stack top: error, traceback
+
+            PushedObject traceBackRef{state, 1};
+
+            const auto traceBack = readTopAndPop<std::string>(state, std::move(traceBackRef)); // stack top: error
 
             PushedObject errorCode{state, 1};
 
@@ -1450,7 +1471,7 @@ private:
                 if (lua_isstring(state, 1)) {
                     // the error is a string
                     const auto str = readTopAndPop<std::string>(state, std::move(errorCode));
-                    throw ExecutionErrorException{str};
+                    throw ExecutionErrorException{str+"\n"+traceBack};
 
                 } else {
                     // an exception_ptr was pushed on the stack
@@ -1458,7 +1479,7 @@ private:
                     try {
                         std::rethrow_exception(readTopAndPop<std::exception_ptr>(state, std::move(errorCode)));
                     } catch(...) {
-                        std::throw_with_nested(ExecutionErrorException{"Exception thrown by a callback function called by Lua"});
+                        std::throw_with_nested(ExecutionErrorException{"Exception thrown by a callback function called by Lua. "+traceBack});
                     }
                 }
             }
