@@ -1,3 +1,5 @@
+#include <iostream>
+
 /*
 Copyright (c) 2013, Pierre KRIEGER
 All rights reserved.
@@ -753,7 +755,6 @@ private:
     //    each table has its getter functions at offset 0, getter members at offset 1, default getter at offset 2
     //    offset 3 is unused, setter members at offset 4, default setter at offset 5
     lua_State*                  mState;
-
     
     /**************************************************/
     /*                 PUSH OBJECT                    */
@@ -1399,23 +1400,42 @@ private:
         return readTopAndPop<TReturnType>(state, std::move(outArguments));
     }
     
+    static int gettraceback(lua_State* L) {
+        std::cerr<<"gettraceback called, gettop="<<lua_gettop(L)<<std::endl;
+        lua_getglobal(L, "debug"); // +1 
+        lua_getfield(L, -1, "traceback"); // +1
+        lua_remove(L, -2); // -1 remove "debug"
+        lua_pushvalue(L, -2); // copy error message +1
+        lua_remove(L, -3); // remove error message -1
+        lua_pushinteger(L, 2); // +1
+        lua_call(L, 2, 1); // -3 +1
+        std::cerr<<"traceback: "<<lua_tostring(L, -1)<<std::endl;
+        return 1;
+    }
+
     // this function just calls lua_pcall and checks for errors
     static PushedObject callRaw(lua_State* state, PushedObject functionAndArguments, const int outArguments)
     {
+        // last_traceback = nullptr;
+
+        std::cerr<<"A: "<<lua_gettop(state)<<std::endl;
         // provide traceback handler
-        lua_getglobal(state, "debug");
-        lua_getfield(state, -1, "traceback");
-        lua_remove(state, -2);
-        int tbindex = lua_gettop(state) - functionAndArguments.getNum();
+        int tbindex = lua_gettop(state) - (functionAndArguments.getNum() - 1);
+        lua_pushcfunction(state, gettraceback);
+        std::cerr<<"B: "<<lua_gettop(state)<<std::endl;
 
         // move it back up, before our function and arguments
         lua_insert(state, tbindex);
+        std::cerr<<"C: "<<lua_gettop(state)<<std::endl;
 
         // calling pcall automatically pops the parameters and pushes output
         const auto pcallReturnValue = lua_pcall(state, functionAndArguments.getNum() - 1, outArguments, tbindex);
         functionAndArguments.release();
+        std::cerr<<"D: "<<lua_gettop(state)<<std::endl;
 
         lua_remove(state, tbindex); // remove traceback function
+
+        std::cerr<<"E: "<<lua_gettop(state)<<std::endl;
 
         // if pcall failed, analyzing the problem and throwing
         if (pcallReturnValue != 0) {
