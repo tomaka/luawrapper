@@ -1402,12 +1402,24 @@ private:
     // this function just calls lua_pcall and checks for errors
     static PushedObject callRaw(lua_State* state, PushedObject functionAndArguments, const int outArguments)
     {
+        // provide traceback handler
+        lua_getglobal(state, "debug");
+        lua_getfield(state, -1, "traceback");
+        lua_remove(state, -2);
+        int tbindex = lua_gettop(state) - functionAndArguments.getNum();
+
+        // move it back up, before our function and arguments
+        lua_insert(state, tbindex);
+
         // calling pcall automatically pops the parameters and pushes output
-        const auto pcallReturnValue = lua_pcall(state, functionAndArguments.getNum() - 1, outArguments, 0);
+        const auto pcallReturnValue = lua_pcall(state, functionAndArguments.getNum() - 1, outArguments, tbindex);
         functionAndArguments.release();
+
+        lua_remove(state, tbindex); // remove traceback function
 
         // if pcall failed, analyzing the problem and throwing
         if (pcallReturnValue != 0) {
+
             PushedObject errorCode{state, 1};
 
             // an error occured during execution, either an error message or a std::exception_ptr was pushed on the stack
