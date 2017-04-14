@@ -14,11 +14,8 @@ before_install:
   - cmake -DCMAKE_CXX_FLAGS="-Wall $CXX_FLAGS" ..
 script:
   - make VERBOSE=1
-  - ./tests
+  - ../.travis/runtests
 env:
   - LUA="liblua5.1-dev"
   - LUA="liblua5.2-dev"
   - LUA="libluajit-5.1-dev"
-matrix:
-  allow_failures:
-    - env: LUA="libluajit-5.1-dev"
