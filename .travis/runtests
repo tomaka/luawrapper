@@ -1,0 +1,17 @@
+#!/bin/bash
+set -ex
+
+RET=0
+
+if [ $LUA == libluajit-5.1-dev ]
+then
+  ./tests --gtest_filter=-CustomTypes.MembersPointers:CustomTypes.MembersSharedPointers || RET=1
+  # The next two tests are known to fail; if your changes fix one,
+  # please remove the relevant line.
+  ./tests --gtest_filter=CustomTypes.MembersPointers && RET=1
+  ./tests --gtest_filter=CustomTypes.MembersSharedPointers && RET=1
+else
+  ./tests || RET=1
+fi
+
+exit $RET
