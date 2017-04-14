@@ -1408,12 +1408,8 @@ private:
         lua_call(L, 2, 1); // stack: error, traceback
         lua_createtable(L, 2, 0); // stack: error, traceback, {}
         lua_insert(L, 1); // stack: {}, error, traceback
-        lua_pushnumber(L, 2); // stack: {}, error, traceback, 2
-        lua_insert(L, -2); // stack: {}, error, 2, traceback
-        lua_settable(L, 1); // stack: {[2]=traceback}, error
-        lua_pushnumber(L, 1); // stack: {[2]=traceback}, error, 1
-        lua_insert(L, -2); // stack: {[2]=traceback}, 1, error
-        lua_settable(L, 1); // stack: {[1]=error, [2]=traceback}
+        lua_rawseti(L, 1, 2); // stack: {[2]=traceback}, error
+        lua_rawseti(L, 1, 1); // stack: {[1]=error,[2]=traceback}
         return 1; // return the table
     }
 
@@ -1438,10 +1434,8 @@ private:
         if (pcallReturnValue != 0) {
 
             // stack top: {error, traceback}
-            lua_pushnumber(state, 1); // stack top: {error, traceback}, 1
-            lua_gettable(state, -2); // stack top: {error, traceback}, error
-            lua_pushnumber(state, 2); // stack top: {error, traceback}, error, 2
-            lua_gettable(state, -3); // stack top: {error, traceback}, error, traceback
+            lua_rawgeti(state, -1, 1); // stack top: {error, traceback}, error
+            lua_rawgeti(state, -2, 2); // stack top: {error, traceback}, error, traceback
             lua_remove(state, -3); // stack top: error, traceback
 
             PushedObject traceBackRef{state, 1};
