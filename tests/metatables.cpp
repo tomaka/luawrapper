@@ -41,3 +41,40 @@ TEST(Metatables, WritingMetatableObjects)
 
     EXPECT_EQ(5, context.readVariable<Foo>("foo").value);
 }
+
+TEST(Metatables, customEq)
+{
+   struct Foo { int value = 0; bool operator==(const Foo& rhs) { return rhs.value == this->value; }; };
+   struct Bar { int value = 0; };
+
+   LuaContext context;
+
+   context.registerEqFunction(&Foo::operator==);
+
+   context.writeVariable("a", Foo{});
+   context.writeVariable("b", Foo{});
+
+   EXPECT_TRUE(context.executeCode<bool>("return a == b"));
+
+   /* ensure no error or equality with missing __eq */
+   context.writeVariable("c", Bar{});
+   context.writeVariable("d", Bar{});
+
+   EXPECT_FALSE(context.executeCode<bool>("return c == d"));
+}
+
+TEST(Metatables, customToString)
+{
+   struct Foo { int value = 0; const std::string toString() { return "foo bar"; }; };
+   struct Bar { int value = 0; };
+
+   LuaContext context;
+
+   context.registerToStringFunction(&Foo::toString);
+
+   context.writeVariable("foo", Foo{});
+   context.writeVariable("bar", Bar{});
+
+   EXPECT_EQ("foo bar", context.executeCode<std::string>("return tostring(foo)"));
+   EXPECT_EQ("userdata 0x", context.executeCode<std::string>("return tostring(bar)").substr(0, 11));
+}
