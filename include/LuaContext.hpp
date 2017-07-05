@@ -2564,7 +2564,7 @@ struct LuaContext::Reader<std::vector<std::pair<TType1,TType2>>>
                     return {};
                 }
 
-                result.push_back({ std::move(val1.get()), std::move(val2.get()) });
+                result.push_back({ val1.get(), val2.get() });
                 lua_pop(state, 1);      // we remove the value but keep the key for the next iteration
 
             } catch(...) {
@@ -2602,7 +2602,7 @@ struct LuaContext::Reader<std::map<TKey,TValue>>
                     return {};
                 }
 
-                result.insert({ std::move(key.get()), std::move(value.get()) });
+                result.insert({ key.get(), value.get() });
                 lua_pop(state, 1);      // we remove the value but keep the key for the next iteration
 
             } catch(...) {
@@ -2640,7 +2640,7 @@ struct LuaContext::Reader<std::unordered_map<TKey,TValue>>
                     return {};
                 }
 
-                result.insert({ std::move(key.get()), std::move(value.get()) });
+                result.insert({ key.get(), value.get() });
                 lua_pop(state, 1);      // we remove the value but keep the key for the next iteration
 
             } catch(...) {

@@ -103,6 +103,46 @@ TEST(AdvancedReadWrite, VectorOfPairs) {
     EXPECT_TRUE(val[1].second == "hello" || val[1].second == "world");
 }
 
+TEST(AdvancedReadWrite, VectorOfPairsOfSharedPtr) {
+    LuaContext context;
+
+    context.writeVariable("a", std::vector<std::pair<int,std::shared_ptr<std::string>>> {
+        { 1, std::make_shared<std::string>("hello") },
+        { -23, std::make_shared<std::string>("world") }
+    });
+
+    EXPECT_EQ("hello", *context.readVariable<std::shared_ptr<std::string>>("a", 1));
+    EXPECT_EQ("world", *context.readVariable<std::shared_ptr<std::string>>("a", -23));
+
+    {
+      const auto val = context.readVariable<std::vector<std::pair<int,std::shared_ptr<std::string>>>>("a");
+      EXPECT_TRUE(val[0].first == 1 || val[0].first == -23);
+      EXPECT_TRUE(val[1].first == 1 || val[1].first == -23);
+      EXPECT_TRUE(val[0].second != nullptr);
+      if (val[0].second) {
+        EXPECT_TRUE(*val[0].second == "hello" || *val[0].second == "world");
+      }
+      EXPECT_TRUE(val[1].second != nullptr);
+      if (val[1].second) {
+        EXPECT_TRUE(*val[1].second == "hello" || *val[1].second == "world");
+      }
+    }
+
+    {
+      const auto val = context.readVariable<std::vector<std::pair<int,std::shared_ptr<std::string>>>>("a");
+      EXPECT_TRUE(val[0].first == 1 || val[0].first == -23);
+      EXPECT_TRUE(val[1].first == 1 || val[1].first == -23);
+      EXPECT_TRUE(val[0].second != nullptr);
+      if (val[0].second) {
+        EXPECT_TRUE(*val[0].second == "hello" || *val[0].second == "world");
+      }
+      EXPECT_TRUE(val[1].second != nullptr);
+      if (val[1].second) {
+        EXPECT_TRUE(*val[1].second == "hello" || *val[1].second == "world");
+      }
+    }
+}
+
 TEST(AdvancedReadWrite, Maps) {
     LuaContext context;
     
@@ -128,6 +168,36 @@ TEST(AdvancedReadWrite, Maps) {
     EXPECT_EQ("world", b.at(2));
 }
 
+TEST(AdvancedReadWrite, MapOfSharedPtr) {
+    LuaContext context;
+
+    context.writeVariable("a", std::map<int,std::shared_ptr<std::string>> {
+        { 1, std::make_shared<std::string>("hello") },
+        { -23, std::make_shared<std::string>("world") }
+    });
+
+    EXPECT_EQ("hello", *context.readVariable<std::shared_ptr<std::string>>("a", 1));
+    EXPECT_EQ("world", *context.readVariable<std::shared_ptr<std::string>>("a", -23));
+
+    {
+      const auto val = context.readVariable<std::map<int,std::shared_ptr<std::string>>>("a");
+      EXPECT_TRUE(val.at(1) != nullptr);
+      if (val.at(1) != nullptr) {
+        EXPECT_EQ("hello", *val.at(1));
+        EXPECT_EQ("world", *val.at(-23));
+      }
+    }
+
+    {
+      const auto val = context.readVariable<std::map<int,std::shared_ptr<std::string>>>("a");
+      EXPECT_TRUE(val.at(1) != nullptr);
+      if (val.at(1) != nullptr) {
+        EXPECT_EQ("hello", *val.at(1));
+        EXPECT_EQ("world", *val.at(-23));
+      }
+    }
+}
+
 TEST(AdvancedReadWrite, UnorderedMaps) {
     LuaContext context;
     
@@ -142,6 +212,36 @@ TEST(AdvancedReadWrite, UnorderedMaps) {
     const auto val = context.readVariable<std::unordered_map<int,std::string>>("a");
     EXPECT_EQ("hello", val.at(1));
     EXPECT_EQ("world", val.at(-23));
+}
+
+TEST(AdvancedReadWrite, UnorderedMapOfSharedPtr) {
+    LuaContext context;
+
+    context.writeVariable("a", std::unordered_map<int,std::shared_ptr<std::string>> {
+        { 1, std::make_shared<std::string>("hello") },
+        { -23, std::make_shared<std::string>("world") }
+    });
+
+    EXPECT_EQ("hello", *context.readVariable<std::shared_ptr<std::string>>("a", 1));
+    EXPECT_EQ("world", *context.readVariable<std::shared_ptr<std::string>>("a", -23));
+
+    {
+      const auto val = context.readVariable<std::unordered_map<int,std::shared_ptr<std::string>>>("a");
+      EXPECT_TRUE(val.at(1) != nullptr);
+      if (val.at(1) != nullptr) {
+        EXPECT_EQ("hello", *val.at(1));
+        EXPECT_EQ("world", *val.at(-23));
+      }
+    }
+
+    {
+      const auto val = context.readVariable<std::unordered_map<int,std::shared_ptr<std::string>>>("a");
+      EXPECT_TRUE(val.at(1) != nullptr);
+      if (val.at(1) != nullptr) {
+        EXPECT_EQ("hello", *val.at(1));
+        EXPECT_EQ("world", *val.at(-23));
+      }
+    }
 }
 
 TEST(AdvancedReadWrite, WritingOptionals) {
