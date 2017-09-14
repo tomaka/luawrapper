@@ -387,6 +387,37 @@ The C++ equivalent for `nil` is `nullptr`.
 Note that `nullptr` has its own type, which is different from `0` and `NULL`.
 
 
+#### Comparing objects
+
+    class CustomClass {
+       bool operator==(const CustomClass &rhs) {
+         /* do something complicated */
+       }
+    };
+
+    LuaContext lua;
+
+    lua.registerEqFunction(&CustomClass::operator==);
+
+This will register function `__eq` to Lua for the object, and also use it for metatable comparison event.
+
+
+#### Getting string representation of object
+
+    class CustomClass {
+       const std::string toString() const {
+         return "CustomClass";
+       }
+    };
+
+    LuaContext lua;
+
+    lua.registerToStringFunction(&CustomClass::toString);
+
+
+This will register function `__tostring` to Lua for the object, and also use it for metatable tostring event.
+
+
 #### Custom member functions
 
 In example 3, we saw that you can register functions for a given type with `registerFunction`.
