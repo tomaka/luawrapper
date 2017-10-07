@@ -52,6 +52,7 @@ add_executable(tests
 	tests/movable.cpp
 	tests/metatables.cpp
 	tests/threads.cpp
+	tests/maps.cpp
 )
 
 target_link_libraries(tests
