@@ -1403,8 +1403,8 @@ private:
         lua_getglobal(L, "debug"); // stack: error, "debug"
         lua_getfield(L, -1, "traceback"); // stack: error, "debug", debug.traceback
         lua_remove(L, -2); // stack: error, debug.traceback
-        lua_pushstring(L, ""); // stack: error, debug.traceback, nil
-        lua_pushinteger(L, 2); // stack: error, debug.traceback, nil, 2
+        lua_pushstring(L, ""); // stack: error, debug.traceback, ""
+        lua_pushinteger(L, 2); // stack: error, debug.traceback, "", 2
         lua_call(L, 2, 1); // stack: error, traceback
         lua_createtable(L, 2, 0); // stack: error, traceback, {}
         lua_insert(L, 1); // stack: {}, error, traceback
