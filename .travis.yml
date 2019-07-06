@@ -18,4 +18,5 @@ script:
 env:
   - LUA="liblua5.1-dev"
   - LUA="liblua5.2-dev"
+  - LUA="liblua5.3-dev"
   - LUA="libluajit-5.1-dev"
