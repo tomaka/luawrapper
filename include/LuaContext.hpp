@@ -1403,7 +1403,7 @@ private:
         lua_getglobal(L, "debug"); // stack: error, "debug"
         lua_getfield(L, -1, "traceback"); // stack: error, "debug", debug.traceback
         lua_remove(L, -2); // stack: error, debug.traceback
-        lua_pushnil(L); // stack: error, debug.traceback, nil
+        lua_pushstring(L, ""); // stack: error, debug.traceback, nil
         lua_pushinteger(L, 2); // stack: error, debug.traceback, nil, 2
         lua_call(L, 2, 1); // stack: error, traceback
         lua_createtable(L, 2, 0); // stack: error, traceback, {}
@@ -1439,9 +1439,7 @@ private:
             lua_remove(state, -3); // stack top: error, traceback
 
             PushedObject traceBackRef{state, 1};
-
             const auto traceBack = readTopAndPop<std::string>(state, std::move(traceBackRef)); // stack top: error
-
             PushedObject errorCode{state, 1};
 
             // an error occured during execution, either an error message or a std::exception_ptr was pushed on the stack
@@ -1452,7 +1450,7 @@ private:
                 if (lua_isstring(state, 1)) {
                     // the error is a string
                     const auto str = readTopAndPop<std::string>(state, std::move(errorCode));
-                    throw ExecutionErrorException{str+"\n"+traceBack};
+                    throw ExecutionErrorException{str+traceBack};
 
                 } else {
                     // an exception_ptr was pushed on the stack
