@@ -1,4 +1,4 @@
-dist: trusty
+dist: xenial
 sudo: required
 language: cpp
 compiler:
@@ -18,4 +18,5 @@ script:
 env:
   - LUA="liblua5.1-dev"
   - LUA="liblua5.2-dev"
+  - LUA="liblua5.3-dev"
   - LUA="libluajit-5.1-dev"
