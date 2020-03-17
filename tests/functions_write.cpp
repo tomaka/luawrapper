@@ -248,7 +248,8 @@ TEST(FunctionsWrite, ArgumentTypeMismatch) {
         context.executeCode("foo({}, 1)");
     } catch (LuaContext::ExecutionErrorException e) {
         EXPECT_EQ(
-            std::string("Unable to convert parameter from table to ") + typeid(std::string).name(),
+            std::string("Unable to convert parameter from table to ") + typeid(std::string).name() +
+              std::string("\nstack traceback:\n\t[C]: in function 'foo'\n\t[string \"foo({}, 1)\"]:1: in main chunk"),
             e.what());
         return;
     }
@@ -264,7 +265,8 @@ TEST(FunctionsWrite, OptionalArgumentTypeMismatch) {
         context.executeCode("foo({}, 1)");
     } catch (LuaContext::ExecutionErrorException e) {
         EXPECT_EQ(
-            std::string("Unable to convert parameter from table to ") + typeid(boost::optional<std::string>).name(),
+            std::string("Unable to convert parameter from table to ") + typeid(boost::optional<std::string>).name() +
+              std::string("\nstack traceback:\n\t[C]: in function 'foo'\n\t[string \"foo({}, 1)\"]:1: in main chunk"),
             e.what());
         return;
     }
