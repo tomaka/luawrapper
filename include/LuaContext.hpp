@@ -1285,12 +1285,12 @@ private:
             writeFunction_(object, name, value);
         });
         
-        setTable<void (TObject*, std::string, TVarType)>(mState, Registry, &typeid(TObject*), 2, [writeFunction_](TObject* object, const std::string& name, const TVarType& value) {
+        setTable<void (TObject*, std::string, TVarType)>(mState, Registry, &typeid(TObject*), 5, [writeFunction_](TObject* object, const std::string& name, const TVarType& value) {
             assert(object);
             writeFunction_(*object, name, value);
         });
         
-        setTable<void (std::shared_ptr<TObject>, std::string, TVarType)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 2, [writeFunction_](const std::shared_ptr<TObject>& object, const std::string& name, const TVarType& value) {
+        setTable<void (std::shared_ptr<TObject>, std::string, TVarType)>(mState, Registry, &typeid(std::shared_ptr<TObject>), 5, [writeFunction_](const std::shared_ptr<TObject>& object, const std::string& name, const TVarType& value) {
             assert(object);
             writeFunction_(*object, name, value);
         });

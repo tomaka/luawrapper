@@ -273,6 +273,12 @@ TEST(CustomTypes, GenericMembers) {
     EXPECT_EQ(5, context.executeCode<int>("return obj.foo"));
     context.executeCode("obj.bar = 18");
     EXPECT_EQ(18, context.executeCode<int>("return obj.bowl"));
+
+    Object obj;
+    context.writeVariable("objptr", &obj);
+    EXPECT_EQ(5, context.executeCode<int>("return objptr.foo"));
+    EXPECT_NO_THROW(context.executeCode("objptr.bar = 18"));
+    EXPECT_EQ(18, context.executeCode<int>("return objptr.bowl"));
 }
 
 TEST(CustomTypes, CopiesCheckReadWrite) {
